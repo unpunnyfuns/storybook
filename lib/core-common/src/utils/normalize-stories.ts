@@ -46,7 +46,12 @@ export const getDirectoryFromWorkingDir = ({
 }: NormalizeOptions & { directory: string }) => {
   const directoryFromConfig = path.resolve(configDir, directory);
   const directoryFromWorking = path.relative(workingDir, directoryFromConfig);
-
+  console.log('*******************');
+  console.log(workingDir);
+  console.log(directoryFromConfig);
+  console.log(directoryFromWorking);
+  console.log(normalizeStoryPath(directoryFromWorking));
+  console.log('*******************');
   // relative('/foo', '/foo/src') => 'src'
   // but we want `./src` to match importPaths
   return normalizeStoryPath(directoryFromWorking);
