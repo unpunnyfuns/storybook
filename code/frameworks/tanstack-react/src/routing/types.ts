@@ -2,6 +2,8 @@ import type { AnyRoute, FileRoutesByPath, Register } from '@tanstack/react-route
 import type { AnyContext, ResolveParams, RouteOptions, RoutesByPath } from '@tanstack/router-core';
 import type { Decorator } from '@storybook/react';
 
+import type { NavigationMode } from './navigation-mode.ts';
+
 /** Union of every registered full path (e.g. `'/' | '/admin/users' | '/$libraryId/$version'`). */
 // @ts-expect-error - router is registered in user land
 export type RegisteredFullPath = keyof Register['router']['routesByPath'];
@@ -177,6 +179,18 @@ export interface RouterParameters<
    * ```
    */
   routeOverrides?: RouteTreeOverrides;
+
+  /**
+   * How `<Link>` / `<Navigate>` behave inside the story:
+   *
+   * - `'spy'` (default): navigation is blocked and logged to the Actions panel.
+   * - `'same-route'`: search/path-param changes on the story's current route
+   *   navigate for real; cross-route navigation stays blocked-and-logged.
+   * - `'real'`: all navigation runs against the story's memory router.
+   *
+   * Every mode logs the `navigate` action.
+   */
+  navigation?: NavigationMode;
 
   context?: Record<string, unknown>;
 

@@ -22,6 +22,7 @@ import {
   type DuplicatedTree,
 } from './duplicate-tree.ts';
 import { isRoute } from './utils.ts';
+import { NavigationModeContext } from './navigation-mode.ts';
 import { normalizeFileRoutePath } from './path-utils.ts';
 
 interface TanStackRouterStoryProps {
@@ -71,9 +72,13 @@ function TanStackRouterStory({ Story, context }: TanStackRouterStoryProps) {
     [context.id, routerContext]
   );
 
+  const navigationMode = context.parameters.tanstack?.router?.navigation ?? 'spy';
+
   return (
     <StoryContext.Provider value={{ Story }}>
-      <RouterProvider router={router} context={providerContext}></RouterProvider>
+      <NavigationModeContext.Provider value={navigationMode}>
+        <RouterProvider router={router} context={providerContext}></RouterProvider>
+      </NavigationModeContext.Provider>
     </StoryContext.Provider>
   );
 }

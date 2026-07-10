@@ -6,6 +6,8 @@ import React from 'react';
 import { useEffect } from 'storybook/internal/preview-api';
 
 import {
+  Link as _Link,
+  Navigate as _NavigateComponent,
   useNavigate as _useNavigate,
   useRouter as _useRouter,
   useBlocker as _useBlocker,
@@ -26,7 +28,12 @@ import {
 } from '@tanstack/react-router';
 import type { Navigate as _Navigate } from '@tanstack/react-router';
 import { onNavigate } from './spies.ts';
+import { NavigationModeContext, isSameRouteNavigation } from '../routing/navigation-mode.ts';
 import { isPathlessFileRouteId, normalizeFileRoutePath } from '../routing/path-utils.ts';
+
+// Public spy surface: play functions can assert navigation intents via
+// `import { onNavigate } from '@storybook/tanstack-react/react-router'`.
+export { onNavigate } from './spies.ts';
 
 // Mock navigation hooks — backed by real implementations so they work in stories
 export const useNavigate = fn(_useNavigate).mockName('@tanstack/react-router::useNavigate');
@@ -46,37 +53,61 @@ export const useRouteContext = fn(_useRouteContext).mockName(
 export const useCanGoBack = fn(_useCanGoBack).mockName('@tanstack/react-router::useCanGoBack');
 export const useLinkProps = fn(_useLinkProps).mockName('@tanstack/react-router::useLinkProps');
 
-export const Navigate: typeof _Navigate = ({ to, href }) => {
+export const Navigate = ((props: any) => {
+  const { to, href } = props;
+  const mode = React.useContext(NavigationModeContext);
+  const router = useRouter();
+  const performed =
+    mode === 'real' || (mode === 'same-route' && isSameRouteNavigation(router, props));
+
   useEffect(() => {
     onNavigate({ to: (to as string) || href });
   }, [to, href]);
 
+  if (performed) {
+    return React.createElement(_NavigateComponent as any, props);
+  }
   return null;
-};
+}) as unknown as typeof _Navigate;
 
-export const Link = ({
-  to,
-  children,
-  ...props
-}: {
-  to: string;
-  children?: React.ReactNode;
-  [key: string]: unknown;
-}) => {
+export const Link = ((props: any) => {
+  const { to, children, ...rest } = props;
+  const mode = React.useContext(NavigationModeContext);
   const location = useLocation();
-  return React.createElement(
-    'a',
-    {
-      href: to,
-      onClick: (e: React.MouseEvent) => {
-        e.preventDefault();
-        onNavigate({ to, from: location.href });
+  const router = useRouter();
+
+  if (mode === 'spy') {
+    return React.createElement(
+      'a',
+      {
+        href: to,
+        ...rest,
+        // after the spread: a caller-supplied onClick must not clobber the
+        // spy handler, or nothing prevents the anchor default
+        onClick: (e: React.MouseEvent) => {
+          rest.onClick?.(e);
+          e.preventDefault();
+          onNavigate({ to, from: location.href });
+        },
       },
-      ...props,
+      children
+    );
+  }
+
+  // Delegate to the real Link; TanStack skips its navigation handler when the
+  // click event is default-prevented, which is how `'same-route'` blocks
+  // cross-route destinations while still logging them.
+  return React.createElement(_Link as any, {
+    ...props,
+    onClick: (e: React.MouseEvent) => {
+      props.onClick?.(e);
+      onNavigate({ to: to as string, from: location.href });
+      if (mode === 'same-route' && !isSameRouteNavigation(router, props)) {
+        e.preventDefault();
+      }
     },
-    children
-  );
-};
+  });
+}) as unknown as typeof _Link;
 
 /**
  * Override createFileRoute from tanstack react router

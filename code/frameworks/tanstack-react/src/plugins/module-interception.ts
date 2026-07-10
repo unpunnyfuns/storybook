@@ -73,6 +73,15 @@ export function moduleInterceptionPlugin({
             '@storybook/react/entry-preview-argtypes',
             '@storybook/react/entry-preview-docs',
             '@storybook/tanstack-react',
+            // This plugin's resolveId also runs during dep scanning, so an
+            // optimized `@tanstack/react-router` dep would be a prebundled
+            // copy of the MOCK — including a second copy of every module the
+            // mock pulls in. The mock's exempted import of the real router
+            // then resolves to that copy of itself, breaking anything that
+            // relies on shared module instances (e.g. React contexts between
+            // the decorator and the mock). Keep the router out of dep
+            // optimization so there is a single module graph.
+            '@tanstack/react-router',
             '@tanstack/react-start',
             '@tanstack/react-start/server',
             '@tanstack/react-start-server',
