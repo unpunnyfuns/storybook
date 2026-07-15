@@ -107,6 +107,20 @@ Use `'__root__'` as the key to target the root route.
 
 <CodeSnippets path="tanstack-react-route-tree-overrides.md" />
 
+#### Navigating within a story
+
+By default, navigation in stories is spied: `<Link>` clicks and `<Navigate>` renders are blocked, logged to the Actions panel, and recorded on the `onNavigate` spy exported from `@storybook/tanstack-react/react-router`. The story always stays on screen.
+
+Set `parameters.tanstack.router.navigation` to change this per story:
+
+- `'spy'` (default): navigation is blocked and logged.
+- `'same-route'`: navigation that resolves to the story's current route (search or path param changes) runs for real; navigation to other routes stays blocked and logged. Use this to exercise filters, pagination, and toggles while the story keeps showing the same route.
+- `'real'`: all navigation runs in the story's in-memory router. The canvas can leave the story's route; remount the story to return.
+
+Every mode logs the `navigate` action.
+
+<CodeSnippets path="tanstack-react-navigation-modes.md" />
+
 ### Mocking
 
 #### Automatic TanStack Router and TanStack Start mocks
@@ -307,6 +321,14 @@ When `route` is supplied as a plain object, it may also include TanStack route o
 Type: `Record<string, unknown>`
 
 Router context values injected into the story router.
+
+#### `navigation`
+
+Type: `'spy' | 'same-route' | 'real'`
+
+Default: `'spy'`
+
+Controls how `<Link>` and `<Navigate>` behave inside the story: blocked and logged (`'spy'`), performed for real only when the destination resolves to the story's current route (`'same-route'`), or always performed in the story's in-memory router (`'real'`). See [Navigating within a story](#navigating-within-a-story).
 
 #### `params`
 
