@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRootRoute, createRoute } from '@tanstack/react-router';
 
+import { createFileRoute } from '../export-mocks/react-router.ts';
 import { createStoryRouter } from './decorator.tsx';
 
 // Regression coverage for mounting a story directly on a pathless layout
@@ -96,6 +97,42 @@ describe('createStoryRouter with a pathless layout that already has an index chi
     const ids = router.state.matches.map((m: any) => m.routeId).join(',');
     expect(ids).toContain('authed');
     expect(router.state.location.pathname).toBe('/products');
+  });
+});
+
+// A page story imports its route straight from the route file, so the index of
+// a pathless layout (`_app/index.tsx`) can reach the decorator standalone, with
+// the raw file id `/_app/`. Read as a pathless layout it arrives with no path,
+// and `ensureMatchableLeaf` then appends the synthetic index it needs to make a
+// pathless leaf matchable, which derives that same `/_app/`. Read as the index
+// it is, the route carries a path of its own, no synthetic child is added, and
+// the collision cannot arise.
+describe('createStoryRouter with a standalone index of a pathless layout', () => {
+  it('mounts a root-level layout index without colliding', async () => {
+    const router = createStoryRouter({
+      Story: () => null,
+      context: fakeContext(createFileRoute('/_app/')({}) as any),
+    });
+    await router.load();
+
+    expect(router.state.matches.map((m: any) => m.routeId)).toContain('/_app/');
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  // Pinned to `/settings`, not `/settings/`: a standalone nested index carries
+  // `path: '/settings/'`, which TanStack matches at `/settings`, so the
+  // trailing-slash URL matches nothing. That is not specific to pathless
+  // layouts (a plain `settings/index.tsx` behaves the same) and is left alone
+  // here. The point is that the layout index now behaves exactly like that
+  // plain index instead of colliding.
+  it('matches a nested layout index at its ancestor URL', async () => {
+    const router = createStoryRouter({
+      Story: () => null,
+      context: fakeContext(createFileRoute('/settings/_tabs/')({}) as any, { path: '/settings' }),
+    });
+    await router.load();
+
+    expect(router.state.matches.map((m: any) => m.routeId)).toContain('/settings/_tabs/');
   });
 });
 
