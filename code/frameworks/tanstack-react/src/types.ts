@@ -12,6 +12,17 @@ type BuilderName = CompatibleString<'@storybook/builder-vite'>;
 export type FrameworkOptions = {
   /** Builder options passed through to @storybook/builder-vite. */
   builder?: BuilderOptions;
+  /**
+   * Path to the app's generated route tree, relative to the Storybook config
+   * directory's parent, or absolute.
+   *
+   * Storybook loads this so file routes reach stories carrying the id, path and
+   * parent the generated tree assigns them; apps get that from their entry
+   * module, which Storybook never loads. Defaults to looking for
+   * `src/routeTree.gen.ts`. Set to `false` to load nothing, which is what
+   * code-based and virtual routing want.
+   */
+  generatedRouteTree?: string | false;
 };
 
 type StorybookConfigFramework = {
