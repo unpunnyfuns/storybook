@@ -7,6 +7,9 @@ import { viteFinal as reactViteFinal } from '@storybook/react-vite/preset';
 import { serverCodeEliminationPlugin } from './plugins/server-code-elimination.ts';
 import { serverOnlyStubPlugin } from './plugins/server-only-stub.ts';
 import { moduleInterceptionPlugin } from './plugins/module-interception.ts';
+import { resolveRouteTreeConnection } from './plugins/route-tree-connection.ts';
+import { routeTreeInjectionPlugin } from './plugins/route-tree-injection.ts';
+import type { FrameworkOptions } from './types.ts';
 
 export const core: PresetProperty<'core'> = async (config, options) => {
   const framework = await options.presets.apply('framework');
@@ -69,6 +72,21 @@ export const viteFinal: StorybookConfigVite['viteFinal'] = async (config, option
     serverOnlyStubPlugin(),
     moduleInterceptionPlugin({ startMockPath, startStorageContextMockPath, routerMockPath }),
   ];
+
+  // Connect the app's generated route tree so file routes reach the decorator
+  // with the identity it assigns them. Apps do this from their entry module,
+  // which Storybook never loads. Opt out with `generatedRouteTree: false`, or
+  // point it elsewhere with a path.
+  const framework = await options.presets.apply('framework');
+  const frameworkOptions: FrameworkOptions =
+    typeof framework === 'string' ? {} : (framework.options ?? {});
+  const connection = resolveRouteTreeConnection({
+    configDir: options.configDir,
+    generatedRouteTree: frameworkOptions.generatedRouteTree,
+  });
+  if (connection) {
+    plugins.push(routeTreeInjectionPlugin(connection));
+  }
 
   return {
     ...reactConfig,

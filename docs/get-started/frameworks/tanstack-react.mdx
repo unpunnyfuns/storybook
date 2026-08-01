@@ -296,6 +296,18 @@ Type: `Record<string, any>`
 
 Configure options for the [framework's builder](../../api/main-config/main-config-framework.mdx#optionsbuilder). Available options can be found in the [Vite builder docs](../../builders/vite.mdx).
 
+#### `generatedRouteTree`
+
+Type: `string | false`
+
+Default: `src/routeTree.gen.ts`
+
+Path to your app's generated route tree, relative to the project root or absolute.
+
+Storybook loads this file so that file routes reach your stories carrying the id, path and parent that the generated tree assigns them. Your app gets that by importing the tree in its entry module, which Storybook never loads, so without it a story bound to a file route renders outside its layouts and cannot resolve its own URL.
+
+Set it to a path if your router plugin writes the tree somewhere other than the default, or to `false` to load nothing, which is what code-based and virtual routing want.
+
 ### Parameters
 
 This framework contributes the following [parameters](../../writing-stories/parameters.mdx) to Storybook under the `tanstack.router` namespace:
