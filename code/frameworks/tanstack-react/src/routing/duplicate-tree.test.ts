@@ -9,6 +9,7 @@ import {
 
 import { createFileRoute } from '../export-mocks/react-router.ts';
 import { duplicateRouteTree } from './duplicate-tree.ts';
+import type { RouteTreeOverrides } from '../index.ts';
 
 async function matchedRouteIds(routeTree: any, path: string): Promise<Array<string>> {
   const router = createRouter({
@@ -267,5 +268,13 @@ describe('duplicateRouteTree matrix (code-based and file-based trees)', () => {
     await router.load();
 
     expect((router as any).routesById['__root__'].options.component).toBe(marker);
+  });
+
+  // The runtime assertion is trivial; the gate is that the annotation compiles.
+  it('types a __root__ override without casts', () => {
+    const overrides: RouteTreeOverrides = {
+      __root__: { component: () => null },
+    };
+    expect(overrides.__root__).toBeDefined();
   });
 });
