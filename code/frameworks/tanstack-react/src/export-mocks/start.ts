@@ -55,6 +55,7 @@ type MockServerState = {
 
 type BrowserStartGlobals = typeof globalThis & {
   __TSR_ROUTER__?: unknown;
+  __TSS_START_OPTIONS__?: unknown;
   [START_SERVER_STATE_SYMBOL]?: MockServerState;
 };
 
@@ -642,7 +643,19 @@ export const notFound = () => {
 };
 
 // TanStack Start server entry
-export const createStart = () => ({});
+export const createStart = (getOptions?: () => any) => {
+  const result = getOptions ? getOptions() : {};
+
+  if (result && typeof result.then === 'function') {
+    Promise.resolve(result).then((resolved) => {
+      browserGlobals.__TSS_START_OPTIONS__ = resolved;
+    });
+  } else {
+    browserGlobals.__TSS_START_OPTIONS__ = result;
+  }
+
+  return {};
+};
 
 // Cookie helpers (client-side simple storage)
 const clientCookieStore = new Map<string, string>();

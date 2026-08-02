@@ -22,7 +22,7 @@ function createFallbackStartContext(): StartStorageContext | undefined {
     getRouter: () => browserGlobals.__TSR_ROUTER__ as never,
     request: new Request('http://localhost/'),
     startOptions: browserGlobals.__TSS_START_OPTIONS__,
-    contextAfterGlobalMiddlewares: undefined,
+    contextAfterGlobalMiddlewares: {},
     executedRequestMiddlewares: new Set(),
   };
 }
