@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import type { PresetProperty } from 'storybook/internal/types';
+import { safeResolveModule } from 'storybook/internal/common';
+import type { Options, PresetProperty } from 'storybook/internal/types';
 import { dirname } from 'pathe';
 import type { StorybookConfigVite } from '@storybook/builder-vite';
 import { viteFinal as reactViteFinal } from '@storybook/react-vite/preset';
@@ -26,10 +27,23 @@ export const previewAnnotations: PresetProperty<'previewAnnotations'> = (entry =
   fileURLToPath(import.meta.resolve('@storybook/tanstack-react/preview')),
 ];
 
-export const optimizeViteDeps = [
+// Not dependencies or peers of this framework, so they only belong in
+// `optimizeDeps.include` when the user's project has them: an unconditional
+// include makes Vite log "Failed to resolve dependency" on every cold start.
+const devtoolsPackages = [
+  '@tanstack/react-devtools',
+  '@tanstack/react-query-devtools',
+  '@tanstack/react-router-devtools',
+];
+
+export const optimizeViteDeps = (config: string[] = [], options?: Partial<Options>) => [
+  ...config,
   '@tanstack/react-store',
   '@tanstack/react-router > @tanstack/react-store',
   'use-sync-external-store/shim/with-selector',
+  ...devtoolsPackages.filter((pkg) =>
+    safeResolveModule({ specifier: pkg, parent: options?.configDir })
+  ),
 ];
 
 export const viteFinal: StorybookConfigVite['viteFinal'] = async (config, options) => {
