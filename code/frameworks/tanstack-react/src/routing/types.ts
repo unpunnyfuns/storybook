@@ -140,14 +140,17 @@ export interface RouteOverrideOptions<
  *   '/demo/form/simple/$id': {
  *     loader: async () => ({ name: 'Mock User' }),
  *   },
+ *   '__root__': { beforeLoad: () => {} },
  * }
  * ```
  */
-export type RouteTreeOverrides = Partial<{
-  [routePath in keyof FileRoutesByPath]:
-    | RouteOverrideOptions<FileRoutesByPath[routePath]['preLoaderRoute']>
-    | undefined;
-}>;
+export type RouteTreeOverrides = [keyof FileRoutesByPath] extends [never]
+  ? Record<string, RouteOverrideOptions>
+  : Partial<{
+      [routePath in keyof FileRoutesByPath]:
+        | RouteOverrideOptions<FileRoutesByPath[routePath]['preLoaderRoute']>
+        | undefined;
+    }> & { __root__?: RouteOverrideOptions };
 
 export interface RouterParameters<
   TRoute = undefined,
@@ -178,6 +181,7 @@ export interface RouterParameters<
    *   '/demo/form/simple/$id': {
    *     loader: async () => ({ name: 'Mock User' }),
    *   },
+   *   '__root__': { beforeLoad: () => {} },
    * }
    * ```
    */
