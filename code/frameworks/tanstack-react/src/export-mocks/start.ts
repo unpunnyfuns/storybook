@@ -381,7 +381,10 @@ export const getRequestProtocol = createNamedMock(
 );
 
 export const setResponseHeaders = createNamedMock('setResponseHeaders', (headers: HeadersInit) => {
-  getState().responseHeaders = new Headers(headers);
+  const existing = getState().responseHeaders;
+  new Headers(headers).forEach((value, key) => {
+    existing.set(key, value);
+  });
 });
 
 export const getResponseHeaders = createNamedMock(
@@ -449,18 +452,14 @@ export const getCookie = createNamedMock('getCookie', (name: string) => {
 export const setCookie = createNamedMock(
   'setCookie',
   (name: string, value: string, options?: Record<string, unknown>) => {
-    const state = getState();
-    state.cookies.set(name, value);
-    state.responseHeaders.append('set-cookie', serializeCookie(name, value, options));
+    getState().responseHeaders.append('set-cookie', serializeCookie(name, value, options));
   }
 );
 
 export const deleteCookie = createNamedMock(
   'deleteCookie',
   (name: string, options?: Record<string, unknown>) => {
-    const state = getState();
-    state.cookies.delete(name);
-    state.responseHeaders.append(
+    getState().responseHeaders.append(
       'set-cookie',
       serializeCookie(name, '', {
         ...options,
