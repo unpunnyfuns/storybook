@@ -39,14 +39,14 @@ export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] }
       // and not worry about the handler since tanstack start users are Vite > 8 only
       filter: {
         id: {
-          include: [/\.tsx?$/],
+          include: [/\.[mc]?[jt]sx?($|\?)/],
           exclude: [/node_modules/],
         },
         code: ANY_PATTERN_RE,
       },
       async handler(code, id) {
         // Only process JS/TS files
-        if (!/\.[mc]?[jt]sx?$/.test(id)) {
+        if (!/\.[mc]?[jt]sx?($|\?)/.test(id)) {
           return null;
         }
 
