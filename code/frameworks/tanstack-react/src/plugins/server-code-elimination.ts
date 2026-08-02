@@ -194,7 +194,8 @@ function serverCodeElimination(
             }
 
             // createIsomorphicFn()...client(fn) → fn(originalImpl) spy wrapping original
-            // createIsomorphicFn()...server(fn) (no .client) → fn() no-op spy
+            // createIsomorphicFn()...server(fn) → fn(clientImpl) if a .client() call is
+            // elsewhere in the chain, otherwise fn() no-op spy
             if (
               resolves(root.rootName, 'createIsomorphicFn') &&
               ISOMORPHIC_FN_RE.test(state.code)
@@ -211,7 +212,8 @@ function serverCodeElimination(
               if (methodName === 'server') {
                 const parent = path.parent;
                 if (!t.isMemberExpression(parent) || !t.isCallExpression(path.parentPath?.parent)) {
-                  path.replaceWith(sbFnCall());
+                  const clientImpl = findClientImplInChain(node);
+                  path.replaceWith(clientImpl ? sbFnCallWithImpl(clientImpl) : sbFnCall());
                   state.modified = true;
                 }
               }
@@ -322,6 +324,34 @@ function getMethodName(node: ReturnType<typeof t.callExpression>): string | null
     return node.callee.property.name;
   }
   return null;
+}
+
+/**
+ * Walk a `createIsomorphicFn()...` chain for a `.client(fn)` call, wherever it
+ * sits relative to `.server(fn)` (e.g. `.client(a).server(b)`).
+ */
+function findClientImplInChain(
+  node: ReturnType<typeof t.callExpression>
+): import('@babel/types').Expression | null {
+  let current: ReturnType<typeof t.callExpression> = node;
+  while (true) {
+    const { callee } = current;
+    if (!t.isMemberExpression(callee)) {
+      return null;
+    }
+    if (
+      t.isIdentifier(callee.property) &&
+      callee.property.name === 'client' &&
+      current.arguments[0] &&
+      t.isExpression(current.arguments[0])
+    ) {
+      return current.arguments[0];
+    }
+    if (!t.isCallExpression(callee.object)) {
+      return null;
+    }
+    current = callee.object;
+  }
 }
 
 /**
