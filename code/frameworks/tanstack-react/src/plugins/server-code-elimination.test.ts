@@ -154,6 +154,16 @@ describe('serverCodeEliminationPlugin', () => {
       expect(result!.code).toContain('__sb_fn()');
       expect(result!.code).not.toMatch(/['"]s['"]/);
     });
+
+    it('keeps the client impl when .server() is outermost', async () => {
+      const code = `
+import { createIsomorphicFn } from '@tanstack/react-start';
+export const f = createIsomorphicFn().client(() => 'CLIENT').server(() => 'SERVER');
+`;
+      const result = await transform(code, '/app/src/iso.ts');
+      expect(result?.code).toContain('CLIENT');
+      expect(result?.code).not.toContain('SERVER');
+    });
   });
 
   describe('route factories', () => {
