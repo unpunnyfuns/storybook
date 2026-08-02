@@ -1,3 +1,5 @@
+import { once } from 'storybook/internal/client-logger';
+
 import React, { type ComponentType } from 'react';
 import type { Decorator } from '@storybook/react-vite';
 import {
@@ -98,10 +100,19 @@ export function createStoryRouter({
     mountPathFor(leaf);
 
   // Interpolate params into the path and append query/search params.
-  let resolvedPath = interpolatePath({
+  const interpolated = interpolatePath({
     path: inferredPath,
     params: routerParameters?.params ?? {},
-  }).interpolatedPath;
+  });
+  // Not `interpolated.isMissingParams`: a splat route mounted without `_splat`
+  // reports it true but interpolates to a URL with no "undefined" in it
+  // (`/docs/$` -> `/docs`). Warn only when the message would be true.
+  if (interpolated.interpolatedPath.includes('undefined')) {
+    once.warn(
+      `[@storybook/tanstack-react] "${inferredPath}" has path params that were not provided via parameters.tanstack.router.params; the mounted URL will contain the literal string "undefined".`
+    );
+  }
+  let resolvedPath = interpolated.interpolatedPath;
   const search = routerParameters?.query ? defaultStringifySearch(routerParameters.query) : '';
   if (search) {
     resolvedPath += search;

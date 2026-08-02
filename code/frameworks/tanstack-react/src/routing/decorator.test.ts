@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { once } from 'storybook/internal/client-logger';
+
 import { createRootRoute, createRoute } from '@tanstack/react-router';
 
 import { createFileRoute } from '../export-mocks/react-router.ts';
 import { createStoryRouter } from './decorator.tsx';
+
+vi.mock('storybook/internal/client-logger');
 
 // Regression coverage for mounting a story directly on a pathless layout
 // nested under a pathful ancestor. Cloned routes aren't `init()`ed until
@@ -193,7 +198,7 @@ describe('createStoryRouter leaf selection by path', () => {
 
     const router = createStoryRouter({
       Story: () => null,
-      context: fakeContext(postIndex, { path: '/posts/$postId' }),
+      context: fakeContext(postIndex, { path: '/posts/$postId', params: { postId: '1' } }),
     });
     await router.load();
 
@@ -215,5 +220,50 @@ describe('createStoryRouter leaf selection by path', () => {
 
     expect((router as any).routesById['/users/me'].options.component).toBeDefined();
     expect((router as any).routesById['/users/$userId'].options.component).toBeUndefined();
+  });
+});
+
+describe('missing path params', () => {
+  it('warns when a param route is mounted without params', async () => {
+    const root = createRootRoute();
+    const detail = createRoute({ path: '/users/$userId', getParentRoute: () => root });
+    root.addChildren([detail]);
+
+    const router = createStoryRouter({
+      Story: () => null,
+      context: fakeContext(detail),
+    });
+    await router.load();
+
+    expect(once.warn).toHaveBeenCalledWith(expect.stringContaining('params'));
+  });
+
+  it('does not warn when mounting a static route with no params', async () => {
+    const root = createRootRoute();
+    const about = createRoute({ path: '/about', getParentRoute: () => root });
+    root.addChildren([about]);
+
+    const router = createStoryRouter({
+      Story: () => null,
+      context: fakeContext(about),
+    });
+    await router.load();
+
+    expect(once.warn).not.toHaveBeenCalled();
+  });
+
+  // `/docs/$` interpolates to `/docs`, so the warning's text would be untrue.
+  it('does not warn when mounting a splat route without _splat', async () => {
+    const root = createRootRoute();
+    const docs = createRoute({ path: '/docs/$', getParentRoute: () => root });
+    root.addChildren([docs]);
+
+    const router = createStoryRouter({
+      Story: () => null,
+      context: fakeContext(docs),
+    });
+    await router.load();
+
+    expect(once.warn).not.toHaveBeenCalled();
   });
 });
