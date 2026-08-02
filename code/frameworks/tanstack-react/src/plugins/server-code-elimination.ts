@@ -162,6 +162,19 @@ function serverCodeElimination(
               return;
             }
 
+            // createServerFn()...validator(fn) / .inputValidator(fn) → strip call
+            if (
+              resolves(root.rootName, 'createServerFn') &&
+              (methodName === 'validator' || methodName === 'inputValidator') &&
+              SERVER_FN_RE.test(state.code)
+            ) {
+              if (t.isMemberExpression(path.node.callee)) {
+                path.replaceWith(path.node.callee.object);
+                state.modified = true;
+              }
+              return;
+            }
+
             // createServerFn()...handler(fn) → replace handler arg with fn() spy
             if (
               methodName === 'handler' &&
@@ -182,9 +195,13 @@ function serverCodeElimination(
               return;
             }
 
-            // createMiddleware()...server(fn) / .inputValidator(fn) → strip call
+            // createMiddleware()...server(fn) / .inputValidator(fn) / .validator(fn) → strip call
             if (resolves(root.rootName, 'createMiddleware') && MIDDLEWARE_RE.test(state.code)) {
-              if (methodName === 'server' || methodName === 'inputValidator') {
+              if (
+                methodName === 'server' ||
+                methodName === 'inputValidator' ||
+                methodName === 'validator'
+              ) {
                 if (t.isMemberExpression(path.node.callee)) {
                   path.replaceWith(path.node.callee.object);
                   state.modified = true;
