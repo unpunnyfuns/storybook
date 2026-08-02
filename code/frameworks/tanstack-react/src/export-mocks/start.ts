@@ -1,5 +1,6 @@
 import React from 'react';
 import { fn } from 'storybook/test';
+import { createMiddleware as clientCreateMiddleware } from '@tanstack/start-client-core';
 import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
 import { onNavigate } from './spies.ts';
 
@@ -642,7 +643,10 @@ export const notFound = () => {
 };
 
 // TanStack Start server entry
-export const createStart = () => ({});
+export const createStart = (getOptions?: () => unknown) => ({
+  getOptions: async () => (getOptions ? getOptions() : {}),
+  createMiddleware: clientCreateMiddleware,
+});
 
 // Cookie helpers (client-side simple storage)
 const clientCookieStore = new Map<string, string>();
