@@ -1,4 +1,5 @@
-import { getDefaultSerovalPlugins } from '@tanstack/start-client-core';
+import { isRedirect } from '@tanstack/router-core';
+import { X_TSS_RAW_RESPONSE, getDefaultSerovalPlugins } from '@tanstack/start-client-core';
 import { fromCrossJSON, toCrossJSONAsync } from 'seroval';
 
 /**
@@ -51,6 +52,55 @@ function copyFormData(data: FormData) {
 }
 
 /**
+ * A `Response` never reaches the serializer, and neither does a redirect.
+ *
+ * The real server handler unwraps `result || error` and, when what it finds is
+ * a `Response`, sets the `x-tss-raw` header on it and sends that `Response` as
+ * the entire HTTP response instead of the usual serialized envelope
+ * (server-functions-handler.ts). The client fetcher sees the header and returns
+ * the `Response` as the transport's whole return value, not as an envelope
+ * (serverFnFetcher.ts, getResponse). The client middleware then routes it to
+ * `result` through the `userCtx instanceof Response` branch in `userNext`
+ * (createServerFn.ts), so the caller receives the bare `Response`.
+ *
+ * Two consequences of that path are reproduced here on purpose. A `Response`
+ * the handler *threw* comes back as a resolved value, because `result || error`
+ * does not care which field held it. And any `sendContext` the server
+ * middleware set is dropped, because the envelope that would have carried it is
+ * never sent.
+ *
+ * One thing is not reproduced: fetch rebuilds the `Response` on the way back,
+ * so a real story never holds the instance its handler created. This hands that
+ * instance straight over, which also means the header set below is written onto
+ * the handler's own object.
+ *
+ * A redirect is a `Response` too but takes the other branch: the handler
+ * returns it without the raw header, and `handleRedirectResponse` in
+ * createStartHandler.ts re-encodes it as JSON options, which the client rebuilds
+ * into a fresh redirect and throws. Rethrowing reaches the same caller-visible
+ * outcome, a rejected call carrying a redirect, by a shorter route. Two things
+ * therefore differ: this throws the handler's own `Response` rather than a copy
+ * rebuilt from JSON, and it skips `handleRedirectResponse`'s guards, which
+ * reject a relative `to` and functional `search`, `params` or `hash` before a
+ * redirect ever leaves a real server. Both leave a story more forgiving than
+ * the wire, never stricter.
+ */
+function unwrapServerResult(returned: any) {
+  const unwrapped = returned.result || returned.error;
+
+  if (isRedirect(unwrapped)) {
+    throw unwrapped;
+  }
+
+  if (unwrapped instanceof Response) {
+    unwrapped.headers.set(X_TSS_RAW_RESPONSE, 'true');
+    return unwrapped;
+  }
+
+  return roundTrip(returned);
+}
+
+/**
  * Stands in for the RPC stub TanStack's compiler generates. The real one
  * serializes and fetches; this one serializes and calls the server half in
  * process, so no request leaves the browser.
@@ -82,8 +132,8 @@ export function createInProcessTransport() {
         ? { data: copyFormData(payload.data), context: await roundTrip(payload.context) }
         : await roundTrip({ data: payload.data, context: payload.context });
 
-    const result = await built.current!.__executeServer({ ...sent, method: payload.method });
-    return roundTrip(result);
+    const returned = await built.current!.__executeServer({ ...sent, method: payload.method });
+    return unwrapServerResult(returned);
   };
 
   return { transport, bind: (fn: typeof built.current) => (built.current = fn) };

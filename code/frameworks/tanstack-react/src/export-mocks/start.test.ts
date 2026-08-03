@@ -2,6 +2,8 @@ import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vite
 
 import { once } from 'storybook/internal/client-logger';
 
+import { isRedirect, redirect } from '@tanstack/router-core';
+
 import { setStoryStartContext } from '../story-start-context.ts';
 import { createMiddleware, createServerFn as createServerFnMock, createStart } from './start.ts';
 import { getStartContext } from './start-storage-context.ts';
@@ -147,6 +149,45 @@ describe('createServerFn delegation', () => {
     setStoryStartContext({ user: 'ada' });
     const call = createServerFn({ method: 'GET' }).handler(({ context }: any) => context.user);
     await expect(call()).resolves.toBe('ada');
+  });
+
+  it('hands a Response back without serializing it', async () => {
+    const call = createServerFn({ method: 'GET' }).handler(
+      () => new Response('raw body', { status: 200 })
+    );
+    const result = await call();
+    expect(result).toBeInstanceOf(Response);
+    await expect(result.text()).resolves.toBe('raw body');
+  });
+
+  it('marks a raw Response the way the real server does', async () => {
+    const call = createServerFn({ method: 'GET' }).handler(() => new Response('raw body'));
+    const result = await call();
+    expect(result.headers.get('x-tss-raw')).toBe('true');
+  });
+
+  it('hands back a Response the handler threw rather than rejecting', async () => {
+    const call = createServerFn({ method: 'GET' }).handler(() => {
+      throw new Response('boom', { status: 500 });
+    });
+    const result = await call();
+    expect(result.status).toBe(500);
+    await expect(result.text()).resolves.toBe('boom');
+  });
+
+  it('throws a redirect rather than handing it back as a Response', async () => {
+    const call = createServerFn({ method: 'GET' }).handler(() => redirect({ to: '/after' }));
+    const error = await call().catch((thrown: unknown) => thrown);
+    expect(isRedirect(error)).toBe(true);
+    expect((error as any).options.to).toBe('/after');
+  });
+
+  it('still copies a non-Response result rather than sharing the handler reference', async () => {
+    const produced = { n: 1 };
+    const call = createServerFn({ method: 'GET' }).handler(() => produced);
+    const result = await call();
+    expect(result).toEqual({ n: 1 });
+    expect(result).not.toBe(produced);
   });
 });
 
