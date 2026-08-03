@@ -1,6 +1,7 @@
 import React from 'react';
 import { once } from 'storybook/internal/client-logger';
 import { fn } from 'storybook/test';
+import { isRedirect } from '@tanstack/react-router';
 import {
   type createServerFn as _createServerFn,
   createMiddleware as clientCreateMiddleware,
@@ -571,9 +572,36 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
   serverFn: T
 ): (...args: Parameters<T>) => ReturnType<T> {
   return React.useCallback(
-    (...args: Parameters<T>) => serverFn(...args) as ReturnType<T>,
+    async (...args: Parameters<T>) => {
+      try {
+        const res = await serverFn(...args);
+
+        if (isRedirect(res)) {
+          throw res;
+        }
+
+        return res;
+      } catch (err) {
+        if (isRedirect(err)) {
+          // Stories do run inside a real RouterProvider (see routing/decorator.tsx),
+          // so a live router is available here. This seam deliberately does not call
+          // router.navigate() anyway: navigation is blocked on purpose so the story
+          // stays on screen, and the attempt is recorded on the onNavigate spy
+          // instead (see spies.ts). What is not reproduced is the real
+          // implementation's router.resolveRedirect() (relative-target resolution)
+          // and its `_fromLocation` stamping; only the redirect's own `to` (or
+          // `href`, for the href-only redirect form) is forwarded, normalized to
+          // match the spy's `{ to, from }` contract the same way react-router.ts's
+          // Navigate does.
+          onNavigate({ to: (err.options.to as string) || err.options.href });
+          return undefined;
+        }
+
+        throw err;
+      }
+    },
     [serverFn]
-  );
+  ) as any;
 }
 
 /**
