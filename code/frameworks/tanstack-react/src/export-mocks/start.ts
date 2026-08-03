@@ -655,24 +655,6 @@ export const createServerFn: typeof _createServerFn = (options?: any) => {
   return wrapServerFnBuilder(realCreateServerFn(options));
 };
 
-export const Link = ({
-  to,
-  children,
-  ...props
-}: {
-  to: string;
-  children?: React.ReactNode;
-  [key: string]: unknown;
-}) => React.createElement('a', { href: to, ...props }, children);
-
-export const Navigate = ({ to }: { to: string }) => {
-  React.useEffect(() => {
-    onNavigate({ to });
-  }, [to]);
-
-  return null;
-};
-
 export const Hydrate = ({ children }: { children?: React.ReactNode; [key: string]: unknown }) =>
   children ?? null;
 
