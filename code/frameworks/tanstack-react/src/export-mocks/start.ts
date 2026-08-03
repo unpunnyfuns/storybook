@@ -1,7 +1,6 @@
 import React from 'react';
 import { fn } from 'storybook/test';
 import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
-import { onNavigate } from './spies.ts';
 
 export * from '@tanstack/start-client-core';
 export * from '@tanstack/react-start';
@@ -614,24 +613,6 @@ export const createServerFn: typeof _createServerFn = (options?: any) => {
     builder.options(options);
   }
   return builder;
-};
-
-export const Link = ({
-  to,
-  children,
-  ...props
-}: {
-  to: string;
-  children?: React.ReactNode;
-  [key: string]: unknown;
-}) => React.createElement('a', { href: to, ...props }, children);
-
-export const Navigate = ({ to }: { to: string }) => {
-  React.useEffect(() => {
-    onNavigate({ to });
-  }, [to]);
-
-  return null;
 };
 
 export const Hydrate = ({ children }: { children?: React.ReactNode; [key: string]: unknown }) =>
