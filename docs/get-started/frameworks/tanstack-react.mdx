@@ -115,7 +115,7 @@ This framework automatically redirects `@tanstack/react-router` imports to a Sto
 
 For TanStack Start apps, the integration also stubs TanStack Start server and runtime entry points. This is what allows components that depend on server functions or Start-specific runtime modules to render in Storybook without a running Start server.
 
-In practice, this means you can usually render TanStack Start components directly. A `createServerFn()` chain still exports a mock function that you can observe and override in stories and tests, and a call you do not override runs the real chain around your handler: the middleware you attached to that function and the validator you gave it. See [What happens when you do not mock a server function](#what-happens-when-you-do-not-mock-a-server-function).
+In practice, this means you can usually render TanStack Start components directly. A `createServerFn()` chain still exports a mock function that you can observe and override in stories and tests, and a call you do not override runs the real chain around your handler, starting with the middleware you attached to that function. See [What happens when you do not mock a server function](#what-happens-when-you-do-not-mock-a-server-function).
 
 #### Mocking server functions in stories
 
@@ -135,39 +135,38 @@ This is useful for documenting loading, success, and error states without changi
 
 <Callout variant="warning">
 
-**Breaking change: unmocked server functions now run their chain**
+**Breaking changes in this release**
 
-Earlier versions replaced a `createServerFn()` chain with a mock that discarded its middleware and its validator, so a call you did not override did nothing at all. Storybook now delegates to TanStack's own builder, so the chain runs. Two things to check when you upgrade:
+_Unmocked server functions now run their chain._ Earlier versions replaced a `createServerFn()` chain with a mock that discarded its middleware and never touched the payload, so a call you did not override did nothing at all. Storybook now delegates to TanStack's own builder and replaces only the transport, so the chain runs. Two things to check when you upgrade:
 
-- The `client` phase of every middleware attached with `.middleware([...])` runs on each unmocked call, so its side effects happen in stories.
-- The validator passed to `.validator()` or `.inputValidator()` runs, so a story that calls a server function with input the validator rejects now fails instead of quietly reaching the handler.
+- The `client` phase of every middleware attached with `.middleware([...])` runs on each unmocked call, so its side effects happen in stories. A middleware that throws, or that redirects, now does so in Storybook.
+- The payload is serialized on its way to the handler, so a story that passes a value a real request could not carry, a callback for example, now fails where it previously went through untouched.
 
-Stories that already override the function are unaffected, because [mocking short-circuits the chain](#mocking-short-circuits-the-chain).
+An unmocked call still resolves to `undefined`, because your handler body is not in the Storybook build. Stories that already override the function are unaffected, because [mocking short-circuits the chain](#mocking-short-circuits-the-chain).
 
-The same release also changes cookie scope to match the real runtime: `setCookie()` writes to the response and `getCookie()` reads from the request, so a value you set is no longer visible to a `getCookie()` later in the same story.
+_Cookie scope now matches the runtime._ `setCookie()` writes to the response and `getCookie()` reads from the request, so a value you set is no longer visible to a `getCookie()` later in the same story.
 
 </Callout>
 
-Storybook replaces the transport rather than the builder, so the chain a story runs is the chain your app declared, in the order it declared it. For a call you do not override, this runs:
+Storybook replaces the transport rather than the builder, so the chain a story runs is the chain your app declared, in the order it declared it. In a default build, a call you do not override runs:
 
 - The `client` phase of each middleware passed to `.middleware([...])`, in order.
 - The serialization step that would put the payload on the wire.
-- The validator the server function itself declares, through `.validator()` or `.inputValidator()`.
+- A no-op spy in place of your `.handler()` body, which is why the call resolves to `undefined`.
 
-Your `.handler()` body and the `server` and `inputValidator` phases of your `createMiddleware()` chains are not in the Storybook build by default, so an unmocked call resolves to `undefined` rather than to whatever your handler would have returned. What changed is everything around that. To keep them in the build, see [Running your own handler code](#running-your-own-handler-code).
+Three things are missing from that list, because the framework removes server-only code from the build before it can reach the browser: your `.handler()` body, the `server` and validator phases of your `createMiddleware()` chains, and the validator the server function itself declares through `.validator()` or `.inputValidator()`. Input a story passes is therefore not validated. See [Running your own handler code](#running-your-own-handler-code) for what you can get back and what it costs.
 
 ##### The transport boundary
 
 The call never leaves the browser. Where the real client would serialize the payload and send a request, Storybook serializes it and calls the server half of the same chain in process. There is no server, no request, and nothing in the network tab.
 
-The serialization is not skipped. The payload and the result are encoded the way the real transport encodes them, so a story cannot hand a handler a value a real request could not carry, and a handler never receives the object the story passed, only a copy of it. `FormData` is the exception the real client also makes: it is passed through as `FormData` instead of being serialized.
+The serialization is not skipped. The payload and the result are encoded the way the real transport encodes them, so a story cannot hand a handler a value a real request could not carry, and a handler never receives the object the story passed, only a copy of it. `FormData` is the exception the real client also makes: it is copied rather than serialized, so `File` and `Blob` entries inside it are shared with the story instead of being rebuilt.
 
-Two kinds of return value bypass serialization in a story exactly as they do on a real server:
+What comes back across the boundary only matters once there is a handler to return it, which means [`executeServerFunctions`](#running-your-own-handler-code). With that on:
 
-- A `Response` is handed back to the caller untouched, with the `x-tss-raw` header set. This includes a `Response` your handler threw, which arrives as a resolved value rather than a rejection.
-- A `redirect()` is thrown, so a story observes it as a rejected call.
-
-Streamed results are the one place a story is less faithful than the wire. A real server encodes the result as it is produced and sends it in chunks, so the caller can start reading before the handler has finished. In a story the value is resolved in full first, so a handler that returns a stream, or a promise that settles later, hands nothing back until it is complete.
+- A `Response` is handed back to the caller untouched, with the `x-tss-raw` header set, as a real server does. This includes a `Response` your handler threw, which arrives as a resolved value rather than a rejection.
+- A `redirect()` your handler returns or throws reaches the caller as a rejected call carrying that redirect. A redirect thrown from a middleware's `client` phase reaches the caller the same way, and that one does happen in a default build.
+- Streamed results are the one place a story is less faithful than the wire. A real server encodes the result as it is produced and sends it in chunks, so the caller can start reading before the handler has finished. In a story the value is resolved in full first, so a handler that returns a stream, or a promise that settles later, hands nothing back until it is complete.
 
 ##### Mocking short-circuits the chain
 
@@ -179,7 +178,7 @@ The mock still records calls, so `toHaveBeenCalledWith` sees the arguments the c
 
 Middleware passed to `createStart({ functionMiddleware: [...] })` cannot run in a Storybook build. The chain reads that list at call time from TanStack's start options, which resolve through a stub that only TanStack's own compiler fills in, and that stub ships inside `node_modules`, where this framework's transforms deliberately do not reach. The list therefore always comes back empty. Storybook logs a warning once when it finds global function middleware configured, rather than dropping it silently. The `serializationAdapters` you pass to `createStart()` are out of reach for the same reason, so the transport falls back to the default serializer.
 
-Middleware attached per function with `.middleware([...])` is not affected by any of this, and neither is a server function's own validator.
+Middleware attached per function with `.middleware([...])` is not affected by any of this.
 
 To give a story the context that global middleware would have produced, set `parameters.tanstack.start.context`. Storybook merges it in exactly where the global middleware's context lands, as the base context every server function handler receives, so per-function middleware can still add to it and override it:
 
@@ -193,11 +192,13 @@ parameters: {
 }
 ```
 
+Only the server half of the chain reads that context, so the parameter has no observable effect until [`executeServerFunctions`](#running-your-own-handler-code) is on. In a default build the two things that would read it, your handler body and your middleware's `server` phases, are not in the bundle.
+
 ##### Running your own handler code
 
-By default the framework removes server-only code from the build before it can reach the browser. For server functions that means the `.handler()` body is replaced with a no-op spy, and the `server` and `inputValidator` phases of `createMiddleware()` chains are dropped.
+By default the framework removes server-only code from the build before it can reach the browser. For server functions that means the `.handler()` body is replaced with a no-op spy, the `server` and validator phases of `createMiddleware()` chains are dropped, and so is the validator the server function itself declares.
 
-The experimental `executeServerFunctions` framework option keeps them instead, so the chain a story runs includes your own handler and your middleware's server phase:
+The experimental `executeServerFunctions` framework option keeps your handler body and your middleware's `server` phase, so the chain a story runs includes your own server code:
 
 ```ts title=".storybook/main.ts"
 framework: {
@@ -207,6 +208,8 @@ framework: {
   },
 },
 ```
+
+Validators are outside what the option covers. A server function's `.validator()` or `.inputValidator()` is removed from the build whether it is on or off, so the input your handler sees in a story is unvalidated either way.
 
 Surviving into the bundle is not the same as being safe to run there, and this is where mocking becomes a precondition rather than a convenience. Every module your handler and its middleware reach has to work in a browser, either on its own, through the TanStack packages the framework already redirects to its mocks, or through a [`__mocks__` file](#app-level-server-modules) you add for each app-level server module in the chain. A handler that reaches a database client or `node:fs` still breaks, at build time or on the first call.
 
@@ -377,6 +380,14 @@ Type: `Record<string, any>`
 
 Configure options for the [framework's builder](../../api/main-config/main-config-framework.mdx#optionsbuilder). Available options can be found in the [Vite builder docs](../../builders/vite.mdx).
 
+#### `executeServerFunctions`
+
+Type: `boolean`
+
+Default: `false`
+
+Experimental. Keeps `createServerFn().handler()` bodies and the `server` phase of `createMiddleware()` chains in the Storybook build instead of stripping them, so a story can run your own server code. It does not make that code browser-safe, and it does not restore validators. See [Running your own handler code](#running-your-own-handler-code).
+
 ### Parameters
 
 This framework contributes the following [parameters](../../writing-stories/parameters.mdx) to Storybook, under the `tanstack.router` namespace unless stated otherwise:
@@ -423,7 +434,7 @@ Per-route overrides keyed by route ID, applied to the story's route and root rou
 
 Type: `Record<string, unknown>`
 
-Supplied under `parameters.tanstack.start`, not `parameters.tanstack.router`. The context a story provides in place of [global function middleware](#global-function-middleware-does-not-run), which cannot run in a Storybook build. Storybook merges it in as the base context every server function handler receives, so per-function middleware can still add to it and override it.
+Supplied under `parameters.tanstack.start`, not `parameters.tanstack.router`. The context a story provides in place of [global function middleware](#global-function-middleware-does-not-run), which cannot run in a Storybook build. Storybook merges it in as the base context every server function handler receives, so per-function middleware can still add to it and override it. Only the server half of the chain reads it, so it has no observable effect unless [`executeServerFunctions`](#executeserverfunctions) is on.
 
 #### `useRouterContext`
 
