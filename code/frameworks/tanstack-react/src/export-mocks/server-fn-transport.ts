@@ -33,6 +33,18 @@ export async function roundTrip<T>(value: T): Promise<T> {
 }
 
 /**
+ * FormData never reaches the serializer in a real app: the client sends it as
+ * the raw request body and the server rebuilds it with request.formData(), so
+ * the handler always receives a FormData instance that is not the one the
+ * caller passed. Copying it here reproduces both halves of that.
+ */
+function copyFormData(data: FormData) {
+  const copy = new FormData();
+  data.forEach((value, key) => copy.append(key, value as string));
+  return copy;
+}
+
+/**
  * Stands in for the RPC stub TanStack's compiler generates. The real one
  * serializes and fetches; this one serializes and calls the server half in
  * process, so no request leaves the browser.
@@ -46,6 +58,11 @@ export async function roundTrip<T>(value: T): Promise<T> {
  * function seroval refuses to serialize. Round-tripping the whole argument
  * would therefore throw on every call.
  *
+ * The two branches mirror serverFnFetcher's two: a payload without FormData is
+ * serialized whole, so seroval can preserve references shared between `data`
+ * and `context`, while a FormData payload has only its `context` serialized,
+ * exactly as getFetchBody does.
+ *
  * The mutable holder is deliberate: the transport needs a reference to the
  * object `.handler()` returns, which does not exist until after `.handler()` is
  * called. The transport is only invoked later, so binding afterwards is safe.
@@ -54,7 +71,11 @@ export function createInProcessTransport() {
   const built: { current?: { __executeServer: (opts: any) => Promise<any> } } = {};
 
   const transport = async (payload: any) => {
-    const sent = await roundTrip({ data: payload.data, context: payload.context });
+    const sent =
+      payload.data instanceof FormData
+        ? { data: copyFormData(payload.data), context: await roundTrip(payload.context) }
+        : await roundTrip({ data: payload.data, context: payload.context });
+
     const result = await built.current!.__executeServer({ ...sent, method: payload.method });
     return roundTrip(result);
   };

@@ -106,6 +106,43 @@ describe('createServerFn delegation', () => {
     await expect(call()).resolves.toBe('real');
   });
 
+  it('hands FormData to the handler as FormData', async () => {
+    const data = new FormData();
+    data.set('x', 'ada');
+
+    const call = createServerFn({ method: 'POST' }).handler(({ data: received }: any) =>
+      received.get('x')
+    );
+
+    await expect(call({ data })).resolves.toBe('ada');
+  });
+
+  it("copies FormData rather than sharing the story's instance", async () => {
+    const data = new FormData();
+    data.set('x', 'ada');
+
+    const call = createServerFn({ method: 'POST' }).handler(
+      ({ data: received }: any) => received === data
+    );
+
+    await expect(call({ data })).resolves.toBe(false);
+  });
+
+  it('still serializes context alongside a FormData payload', async () => {
+    const mw = createMiddleware({ type: 'function' }).client(({ next }) =>
+      next({ sendContext: { user: 'ada' } })
+    );
+
+    const data = new FormData();
+    data.set('x', '1');
+
+    const call = createServerFn({ method: 'POST' })
+      .middleware([mw])
+      .handler(({ context, data: received }: any) => `${context.user}:${received.get('x')}`);
+
+    await expect(call({ data })).resolves.toBe('ada:1');
+  });
+
   it("passes the story's start context to the handler", async () => {
     setStoryStartContext({ user: 'ada' });
     const call = createServerFn({ method: 'GET' }).handler(({ context }: any) => context.user);
