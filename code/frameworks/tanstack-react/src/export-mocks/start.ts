@@ -1,5 +1,6 @@
 import React from 'react';
 import { fn } from 'storybook/test';
+import { createMiddleware as clientCreateMiddleware } from '@tanstack/start-client-core';
 import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
 import { onNavigate } from './spies.ts';
 
@@ -641,8 +642,21 @@ export const notFound = () => {
   throw new Error('Not found');
 };
 
-// TanStack Start server entry
-export const createStart = () => ({});
+/**
+ * The return type is annotated rather than inferred. Handing back the real
+ * `createMiddleware` makes the inferred type reference `CreateMiddlewareFn`
+ * through a `node_modules` path, which tsc refuses to write into a `.d.ts`
+ * (TS2883), so the package build fails while `tsc --noEmit` stays clean.
+ */
+export const createStart = (
+  getOptions?: () => unknown
+): {
+  getOptions: () => Promise<unknown>;
+  createMiddleware: typeof clientCreateMiddleware;
+} => ({
+  getOptions: async () => (getOptions ? getOptions() : {}),
+  createMiddleware: clientCreateMiddleware,
+});
 
 // Cookie helpers (client-side simple storage)
 const clientCookieStore = new Map<string, string>();
