@@ -115,7 +115,7 @@ This framework automatically redirects `@tanstack/react-router` imports to a Sto
 
 For TanStack Start apps, the integration also stubs TanStack Start server and runtime entry points. This is what allows components that depend on server functions or Start-specific runtime modules to render in Storybook without a running Start server.
 
-In practice, this means you can usually render TanStack Start components directly, and `createServerFn()` handlers are replaced with mock functions that you can observe and override in stories and tests.
+In practice, this means you can usually render TanStack Start components directly. A `createServerFn()` chain still exports a mock function that you can observe and override in stories and tests, and a call you do not override runs the real chain around your handler: the middleware you attached to that function and the validator you gave it. See [What happens when you do not mock a server function](#what-happens-when-you-do-not-mock-a-server-function).
 
 #### Mocking server functions in stories
 
@@ -131,13 +131,94 @@ In Storybook, you can override that function for each story:
 
 This is useful for documenting loading, success, and error states without changing your application code.
 
+#### What happens when you do not mock a server function
+
+<Callout variant="warning">
+
+**Breaking change: unmocked server functions now run their chain**
+
+Earlier versions replaced a `createServerFn()` chain with a mock that discarded its middleware and its validator, so a call you did not override did nothing at all. Storybook now delegates to TanStack's own builder, so the chain runs. Two things to check when you upgrade:
+
+- The `client` phase of every middleware attached with `.middleware([...])` runs on each unmocked call, so its side effects happen in stories.
+- The validator passed to `.validator()` or `.inputValidator()` runs, so a story that calls a server function with input the validator rejects now fails instead of quietly reaching the handler.
+
+Stories that already override the function are unaffected, because [mocking short-circuits the chain](#mocking-short-circuits-the-chain).
+
+The same release also changes cookie scope to match the real runtime: `setCookie()` writes to the response and `getCookie()` reads from the request, so a value you set is no longer visible to a `getCookie()` later in the same story.
+
+</Callout>
+
+Storybook replaces the transport rather than the builder, so the chain a story runs is the chain your app declared, in the order it declared it. For a call you do not override, this runs:
+
+- The `client` phase of each middleware passed to `.middleware([...])`, in order.
+- The serialization step that would put the payload on the wire.
+- The validator the server function itself declares, through `.validator()` or `.inputValidator()`.
+
+Your `.handler()` body and the `server` and `inputValidator` phases of your `createMiddleware()` chains are not in the Storybook build by default, so an unmocked call resolves to `undefined` rather than to whatever your handler would have returned. What changed is everything around that. To keep them in the build, see [Running your own handler code](#running-your-own-handler-code).
+
+##### The transport boundary
+
+The call never leaves the browser. Where the real client would serialize the payload and send a request, Storybook serializes it and calls the server half of the same chain in process. There is no server, no request, and nothing in the network tab.
+
+The serialization is not skipped. The payload and the result are encoded the way the real transport encodes them, so a story cannot hand a handler a value a real request could not carry, and a handler never receives the object the story passed, only a copy of it. `FormData` is the exception the real client also makes: it is passed through as `FormData` instead of being serialized.
+
+Two kinds of return value bypass serialization in a story exactly as they do on a real server:
+
+- A `Response` is handed back to the caller untouched, with the `x-tss-raw` header set. This includes a `Response` your handler threw, which arrives as a resolved value rather than a rejection.
+- A `redirect()` is thrown, so a story observes it as a rejected call.
+
+Streamed results are the one place a story is less faithful than the wire. A real server encodes the result as it is produced and sends it in chunks, so the caller can start reading before the handler has finished. In a story the value is resolved in full first, so a handler that returns a stream, or a promise that settles later, hands nothing back until it is complete.
+
+##### Mocking short-circuits the chain
+
+Overriding the exported mock replaces the whole chain, not just the handler. No middleware runs, nothing is serialized, and the value you supply is what the component receives. The [`mockResolvedValue` pattern above](#mocking-server-functions-in-stories) is unchanged.
+
+The mock still records calls, so `toHaveBeenCalledWith` sees the arguments the component passed. Storybook resets mocks between stories, and a reset restores the real chain rather than leaving an empty spy behind.
+
+##### Global function middleware does not run
+
+Middleware passed to `createStart({ functionMiddleware: [...] })` cannot run in a Storybook build. The chain reads that list at call time from TanStack's start options, which resolve through a stub that only TanStack's own compiler fills in, and that stub ships inside `node_modules`, where this framework's transforms deliberately do not reach. The list therefore always comes back empty. Storybook logs a warning once when it finds global function middleware configured, rather than dropping it silently. The `serializationAdapters` you pass to `createStart()` are out of reach for the same reason, so the transport falls back to the default serializer.
+
+Middleware attached per function with `.middleware([...])` is not affected by any of this, and neither is a server function's own validator.
+
+To give a story the context that global middleware would have produced, set `parameters.tanstack.start.context`. Storybook merges it in exactly where the global middleware's context lands, as the base context every server function handler receives, so per-function middleware can still add to it and override it:
+
+```ts
+parameters: {
+  tanstack: {
+    start: {
+      context: { user: { id: '1', name: 'Ada Lovelace' } },
+    },
+  },
+}
+```
+
+##### Running your own handler code
+
+By default the framework removes server-only code from the build before it can reach the browser. For server functions that means the `.handler()` body is replaced with a no-op spy, and the `server` and `inputValidator` phases of `createMiddleware()` chains are dropped.
+
+The experimental `executeServerFunctions` framework option keeps them instead, so the chain a story runs includes your own handler and your middleware's server phase:
+
+```ts title=".storybook/main.ts"
+framework: {
+  name: '@storybook/tanstack-react',
+  options: {
+    executeServerFunctions: true,
+  },
+},
+```
+
+Surviving into the bundle is not the same as being safe to run there, and this is where mocking becomes a precondition rather than a convenience. Every module your handler and its middleware reach has to work in a browser, either on its own, through the TanStack packages the framework already redirects to its mocks, or through a [`__mocks__` file](#app-level-server-modules) you add for each app-level server module in the chain. A handler that reaches a database client or `node:fs` still breaks, at build time or on the first call.
+
+Leave the option off unless you have that mocking in place. Leave it off as well when your stories already override the server functions they exercise, since the handler code is then loaded into the browser bundle without ever running.
+
 #### Handling server-only dependencies
 
 TanStack Start apps often import server-only packages (e.g. database clients, auth libraries) at module scope inside route files. When Storybook loads the route tree, those imports can crash the browser. The integration handles this at three layers:
 
 ##### Framework-level mocks (automatic)
 
-The preset already intercepts `@tanstack/react-start`, `@tanstack/react-start/server`, `@tanstack/start-storage-context`, and related TanStack modules. It also replaces `createServerFn()` handlers with mock functions. You do not need to do anything for these.
+The preset already intercepts `@tanstack/react-start`, `@tanstack/react-start/server`, `@tanstack/start-storage-context`, and related TanStack modules. It also removes `createServerFn()` handler bodies from the build and routes server function calls through an [in-process transport](#the-transport-boundary). You do not need to do anything for these.
 
 ##### App-level server modules
 
@@ -298,7 +379,7 @@ Configure options for the [framework's builder](../../api/main-config/main-confi
 
 ### Parameters
 
-This framework contributes the following [parameters](../../writing-stories/parameters.mdx) to Storybook under the `tanstack.router` namespace:
+This framework contributes the following [parameters](../../writing-stories/parameters.mdx) to Storybook, under the `tanstack.router` namespace unless stated otherwise:
 
 When `route` is supplied as a plain object, it may also include TanStack route options such as [`head`](https://tanstack.com/router/latest/docs/api/router/RouteOptionsType#head-method), [`search`](https://tanstack.com/router/latest/docs/guide/search-params#reading-search-params), and [`params.parse`](https://tanstack.com/router/latest/docs/api/router/RouteOptionsType#paramsparse-method).
 
@@ -337,6 +418,12 @@ Supplies a route instance directly or creates a temporary story route from route
 Type: `Partial<Record<string, RouteOverrideOptions>>`
 
 Per-route overrides keyed by route ID, applied to the story's route and root route. Use `'__root__'` to target the root route. Each entry can override `loader`, `beforeLoad`, `validateSearch`, `loaderDeps`, and `context`.
+
+#### `start.context`
+
+Type: `Record<string, unknown>`
+
+Supplied under `parameters.tanstack.start`, not `parameters.tanstack.router`. The context a story provides in place of [global function middleware](#global-function-middleware-does-not-run), which cannot run in a Storybook build. Storybook merges it in as the base context every server function handler receives, so per-function middleware can still add to it and override it.
 
 #### `useRouterContext`
 
