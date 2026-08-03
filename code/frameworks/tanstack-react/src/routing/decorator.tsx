@@ -1,3 +1,5 @@
+import { once } from 'storybook/internal/client-logger';
+
 import React, { type ComponentType } from 'react';
 import type { Decorator } from '@storybook/react-vite';
 import {
@@ -98,10 +100,27 @@ export function createStoryRouter({
     mountPathFor(leaf);
 
   // Interpolate params into the path and append query/search params.
-  let resolvedPath = interpolatePath({
+  const interpolated = interpolatePath({
     path: inferredPath,
     params: routerParameters?.params ?? {},
-  }).interpolatedPath;
+  });
+  // `isMissingParams` alone is not reliable: a splat route mounted without
+  // `_splat` reports `isMissingParams: true` but interpolates to a URL with
+  // no literal "undefined" in it (e.g. `/docs/$` -> `/docs`). Only warn when
+  // the interpolated path actually contains the string the message warns
+  // about, so the warning stays both accurate and truthful.
+  //
+  // This substring scan still has false positives a path-template-aware
+  // check would avoid: a static path containing "undefined" literally, a
+  // param whose value is the string "undefined", or a param value that
+  // merely contains the substring. The substring check is kept anyway
+  // because it is the only one of these that also gets splat routes right.
+  if (interpolated.interpolatedPath.includes('undefined')) {
+    once.warn(
+      `[@storybook/tanstack-react] "${inferredPath}" has path params that were not provided via parameters.tanstack.router.params; the mounted URL will contain the literal string "undefined".`
+    );
+  }
+  let resolvedPath = interpolated.interpolatedPath;
   const search = routerParameters?.query ? defaultStringifySearch(routerParameters.query) : '';
   if (search) {
     resolvedPath += search;
