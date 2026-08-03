@@ -40,12 +40,23 @@ export type DefaultStoryPath<TRoute> = TRoute extends AnyRoute
   ? keyof RoutesByPath<TRoute>
   : RegisteredFullPath;
 
+export interface StartParameters {
+  /**
+   * Context a story supplies in place of global function middleware, which
+   * cannot run in a Storybook build. Merged as the base context for server
+   * function handlers, exactly where `contextAfterGlobalMiddlewares` lands.
+   */
+  context?: Record<string, unknown>;
+}
+
 export interface TanStackPreviewOptions<
   TRoute = undefined,
   Path extends DefaultStoryPath<TRoute> = DefaultStoryPath<TRoute>,
 > {
   /** Router configuration for stories */
   router?: RouterParameters<TRoute, Path>;
+  /** TanStack Start configuration for stories. */
+  start?: StartParameters;
 }
 
 export interface TanStackParameters<

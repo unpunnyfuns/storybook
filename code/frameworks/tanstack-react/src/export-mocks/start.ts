@@ -1,7 +1,12 @@
 import React from 'react';
+import { once } from 'storybook/internal/client-logger';
 import { fn } from 'storybook/test';
-import { createMiddleware as clientCreateMiddleware } from '@tanstack/start-client-core';
-import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
+import {
+  type createServerFn as _createServerFn,
+  createMiddleware as clientCreateMiddleware,
+  createServerFn as realCreateServerFn,
+} from '@tanstack/start-client-core';
+import { createInProcessTransport } from './server-fn-transport.ts';
 import { onNavigate } from './spies.ts';
 
 export * from '@tanstack/start-client-core';
@@ -56,6 +61,7 @@ type MockServerState = {
 
 type BrowserStartGlobals = typeof globalThis & {
   __TSR_ROUTER__?: unknown;
+  __TSS_START_OPTIONS__?: unknown;
   [START_SERVER_STATE_SYMBOL]?: MockServerState;
 };
 
@@ -570,50 +576,55 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
   );
 }
 
-function createMockServerFnBuilder(): any {
-  const builder = () => createMockServerFnBuilder();
+/**
+ * Wraps a real `createServerFn` builder so every chain step stays wrapped and
+ * `.handler()` ends in a spy.
+ *
+ * The real builder is `Object.assign(fun, res)`: a callable that also carries
+ * `options`, `middleware`, `inputValidator` and `handler`, and `middleware()`
+ * additionally tags its result with a symbol the next `middleware()` call reads
+ * back. Copying the real builder onto the wrapper first preserves all of that,
+ * including symbol keys, so a wrapped builder can still be passed into another
+ * builder's `middleware([...])`. The overrides then re-wrap, because each real
+ * chain method returns a brand new builder that would otherwise escape the
+ * wrapper and take `.handler()` with it.
+ *
+ * `validator` is not on the real builder. It is the name the Storybook mock has
+ * always exposed, and stories written against it must keep working, so it stays
+ * as an alias for `inputValidator`.
+ */
+function wrapServerFnBuilder(builder: any): any {
+  const wrapped = (options?: any) => wrapServerFnBuilder(builder(options));
 
-  let _storedOptions: any;
+  return Object.assign(wrapped, builder, {
+    middleware: (middleware: Array<any>) => wrapServerFnBuilder(builder.middleware(middleware)),
+    inputValidator: (validator: any) => wrapServerFnBuilder(builder.inputValidator(validator)),
+    validator: (validator: any) => wrapServerFnBuilder(builder.inputValidator(validator)),
+    handler: (userHandler?: (...args: Array<any>) => any) => {
+      const { transport, bind } = createInProcessTransport();
+      const real = builder.handler(transport, userHandler);
+      bind(real);
 
-  builder.options = (opts?: any) => {
-    _storedOptions = opts;
-    return builder;
-  };
-
-  builder.middleware = () => {
-    return createMockServerFnBuilder();
-  };
-
-  builder.inputValidator = () => {
-    return createMockServerFnBuilder();
-  };
-
-  builder.validator = () => {
-    return createMockServerFnBuilder();
-  };
-
-  builder.handler = (handlerFn?: (...args: any[]) => any) => {
-    const mock = fn().mockName('@tanstack/start-client-core::createServerFn.handler()');
-
-    if (handlerFn) {
-      mock.mockImplementation(async (opts?: any) => handlerFn(opts));
-    }
-
-    return mock;
-  };
-
-  (builder as any)._getOptions = () => _storedOptions;
-
-  return builder;
+      return fn(real).mockName('@tanstack/start-client-core::createServerFn.handler()');
+    },
+  });
 }
 
-// Override `createServerFn` from start-client-core with our mock version
+/**
+ * Delegates to the real `createServerFn` instead of reimplementing it, so a
+ * story runs the middleware chain and the input validator the app declared.
+ *
+ * The real builder expects the compiler to have supplied an RPC stub as the
+ * first argument to `.handler()`; nothing compiles a Storybook preview, so the
+ * in-process transport stands in for it and calls the server half directly.
+ *
+ * `fn(real)` rather than `fn().mockImplementation(real)` is deliberate. Vitest
+ * restores the implementation a mock was constructed with on `mockReset`, and
+ * Storybook resets mocks between stories, so only the constructed form keeps
+ * running the real chain in the second story a user visits.
+ */
 export const createServerFn: typeof _createServerFn = (options?: any) => {
-  const builder = createMockServerFnBuilder();
-  if (options !== undefined) {
-    builder.options(options);
-  }
-  return builder;
+  return wrapServerFnBuilder(realCreateServerFn(options));
 };
 
 export const Link = ({
@@ -641,11 +652,64 @@ export const notFound = () => {
   throw new Error('Not found');
 };
 
+/**
+ * Global function middleware cannot run in a Storybook build, so say so instead
+ * of silently dropping it.
+ *
+ * The real chain reads it from `getStartOptions()`, which is built on
+ * `createIsomorphicFn`. The runtime ships that as an explicit dummy that
+ * discards both implementations and relies on a compiler transform which never
+ * runs over `node_modules`, so the call returns `undefined` no matter what
+ * `createStart` was given. Nothing this framework can do from the outside
+ * changes that, which is why this is a warning and a documented escape hatch
+ * rather than an implementation.
+ */
+function warnAboutGlobalFunctionMiddleware(options: any) {
+  if (!Array.isArray(options?.functionMiddleware) || options.functionMiddleware.length === 0) {
+    return;
+  }
+
+  once.warn(
+    'TanStack: the global functionMiddleware passed to createStart() does not run in Storybook, ' +
+      'so server functions receive no context from it. Supply the context that middleware would ' +
+      'have produced with the parameters.tanstack.start.context story parameter.'
+  );
+}
+
 // TanStack Start server entry
-export const createStart = (getOptions?: () => unknown) => ({
-  getOptions: async () => (getOptions ? getOptions() : {}),
-  createMiddleware: clientCreateMiddleware,
-});
+/**
+ * The real `createStart` returns `{ getOptions, createMiddleware }` and is
+ * entirely lazy: it calls the thunk only inside `getOptions()`.
+ *
+ * The shape is mirrored, the laziness deliberately is not. Nothing in a
+ * Storybook preview ever calls `getOptions()`, so staying lazy would mean the
+ * options are never published and the global middleware warning never reaches
+ * the app that needs it. The thunk is therefore called once, eagerly, and
+ * `getOptions()` hands back that same result rather than calling it again, so a
+ * story sees the thunk run exactly once rather than twice or not at all.
+ *
+ * Not mirrored: the real `getOptions()` also dedupes `serializationAdapters`.
+ * Neither branch composed here had that, and a merge is the wrong place to add
+ * behavior that neither side shipped.
+ */
+export const createStart = (getOptions?: () => any) => {
+  const result = getOptions ? getOptions() : {};
+
+  if (result && typeof result.then === 'function') {
+    Promise.resolve(result).then((resolved) => {
+      browserGlobals.__TSS_START_OPTIONS__ = resolved;
+      warnAboutGlobalFunctionMiddleware(resolved);
+    });
+  } else {
+    browserGlobals.__TSS_START_OPTIONS__ = result;
+    warnAboutGlobalFunctionMiddleware(result);
+  }
+
+  return {
+    getOptions: async () => result,
+    createMiddleware: clientCreateMiddleware,
+  };
+};
 
 // Cookie helpers (client-side simple storage)
 const clientCookieStore = new Map<string, string>();

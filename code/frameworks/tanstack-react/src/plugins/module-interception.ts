@@ -1,12 +1,14 @@
 import type { Plugin } from 'vite';
 
 const INTERCEPTED_PATTERNS = ['virtual:cloudflare', 'server-entry', 'worker-entry'];
-const START_SERVER_MODULES = [
+export const START_SERVER_MODULES = [
   '@tanstack/react-start',
   '@tanstack/react-start/server',
   '@tanstack/react-start-server',
   '@tanstack/start-server-core',
 ];
+
+export const STORAGE_CONTEXT_MODULE = '@tanstack/start-storage-context';
 
 export function moduleInterceptionPlugin({
   startMockPath,
@@ -42,7 +44,7 @@ export function moduleInterceptionPlugin({
           return resolveMock(startMockPath);
         }
 
-        if (id === '@tanstack/start-storage-context') {
+        if (id === STORAGE_CONTEXT_MODULE) {
           return resolveMock(startStorageContextMockPath);
         }
 
@@ -57,6 +59,26 @@ export function moduleInterceptionPlugin({
       },
     },
 
+    /**
+     * A redirect above is only half a redirect until the specifier is also kept
+     * out of pre-bundling. Vite pre-bundles dependencies with esbuild, which
+     * never calls plugin `resolveId` hooks, so an import written *inside* a
+     * pre-bundled package is inlined against the real module and this plugin
+     * never sees it. Only imports in a user's own source reach the pipeline
+     * where the hook runs.
+     *
+     * `@tanstack/start-client-core` imports `@tanstack/start-storage-context`
+     * internally, and that import is the one the real `createServerFn` uses to
+     * find a start context. Excluding the specifier makes esbuild treat it as
+     * external, which routes it back through the hook.
+     *
+     * The list is derived from the redirect constants rather than repeated, so
+     * the two cannot drift apart. `@tanstack/react-router` is deliberately not
+     * here: its redirect is conditional on the importer, nothing it imports
+     * internally is redirected (only `@tanstack/history`,
+     * `@tanstack/react-store` and `@tanstack/router-core`), and excluding a
+     * package that size costs dev startup for no benefit.
+     */
     config() {
       return {
         optimizeDeps: {
@@ -66,10 +88,8 @@ export function moduleInterceptionPlugin({
             '@storybook/react/entry-preview-argtypes',
             '@storybook/react/entry-preview-docs',
             '@storybook/tanstack-react',
-            '@tanstack/react-start',
-            '@tanstack/react-start/server',
-            '@tanstack/react-start-server',
-            '@tanstack/start-server-core',
+            ...START_SERVER_MODULES,
+            STORAGE_CONTEXT_MODULE,
           ],
         },
       };
