@@ -195,6 +195,17 @@ function clickLink(props: Record<string, unknown> = {}) {
  * `storybook/internal/preview-api`, which throws unless a story hooks context
  * is present, so one is installed for the render and the queued effects are
  * triggered by hand the way the preview would trigger them.
+ *
+ * The installed context is precisely what the preview does not have when
+ * `Navigate` usually mounts: `hookify` sets `STORYBOOK_HOOKS_CONTEXT` around
+ * the story function call only, so a `Navigate` mounted deep in the React tree
+ * by a post-click re-render finds nothing and throws (audit finding 10, open
+ * on this branch). These tests therefore certify the recording and the flag,
+ * not that `Navigate` mounts successfully inside a story.
+ *
+ * When `fix/tanstack-navigate-react-effect` swaps the recorder for React's
+ * `useEffect`, both tests below fail. That failure is the fix landing, not a
+ * regression: delete the shim and render normally.
  */
 function renderNavigate(to: string) {
   const hooks = new HooksContext();
@@ -305,5 +316,20 @@ describe('navigation contract', () => {
     const router = renderHookInRouter(() => useRouter());
 
     expect(router.navigate).toBe(router.navigate);
+  });
+
+  it('passes the missing router through outside a provider, quietly when asked', () => {
+    let captured: unknown = 'nothing captured';
+    const Probe = () => {
+      captured = useRouter({ warn: false });
+      return null;
+    };
+
+    renderToString(React.createElement(Probe));
+
+    // A proxy needs an object, so the mock has to hand the nothing back
+    // untouched, and it has to forward `warn: false` or the real hook
+    // complains on the console, which this suite treats as a failure.
+    expect(captured).toBeNull();
   });
 });
