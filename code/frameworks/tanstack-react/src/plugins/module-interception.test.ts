@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { moduleInterceptionPlugin } from './module-interception.ts';
+import { START_SERVER_MODULES, moduleInterceptionPlugin } from './module-interception.ts';
 
 const MOCKS = {
   startMockPath: '/mocks/start.ts',
@@ -88,6 +88,33 @@ describe('moduleInterceptionPlugin resolveId', () => {
       async (pattern) => {
         const { result } = await resolveId(`some/${pattern}/thing`, '/src/story.ts');
         expect((result as { id: string }).id).toBe('/mocks/start.ts?v=abc123');
+      }
+    );
+  });
+
+  describe('optimizeDeps', () => {
+    function getExclude() {
+      const plugin = moduleInterceptionPlugin(MOCKS);
+      const config = plugin.config as any;
+      return (config.call({}, {}, {}) as any).optimizeDeps.exclude as Array<string>;
+    }
+
+    /**
+     * A redirect that is not also excluded from pre-bundling is only half a
+     * redirect. Vite pre-bundles a dependency with esbuild, which never calls
+     * plugin `resolveId` hooks, so any import made *inside* that dependency is
+     * inlined against the real module. Only imports written in a user's own
+     * source go through the pipeline where the hook runs.
+     *
+     * `@tanstack/start-client-core` imports `@tanstack/start-storage-context`
+     * internally (`getStartContextServerOnly.js`), which is the import the real
+     * `createServerFn` uses to find a start context. Leaving it pre-bundled
+     * binds the AsyncLocalStorage build, which cannot work in a browser.
+     */
+    it.each([...START_SERVER_MODULES, '@tanstack/start-storage-context'])(
+      'excludes %s from pre-bundling so the redirect is not inlined past it',
+      (id) => {
+        expect(getExclude()).toContain(id);
       }
     );
   });
