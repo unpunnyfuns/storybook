@@ -81,9 +81,11 @@ function copyFormData(data: FormData) {
  * outcome, a rejected call carrying a redirect, by a shorter route. Two things
  * therefore differ: this throws the handler's own `Response` rather than a copy
  * rebuilt from JSON, and it skips `handleRedirectResponse`'s guards, which
- * reject a relative `to` and functional `search`, `params` or `hash` before a
- * redirect ever leaves a real server. Both leave a story more forgiving than
- * the wire, never stricter.
+ * reject a relative `to` and functional `search`, `params` or `hash`. Those
+ * guards only ever run for unresolved redirects in a real server too, since
+ * `handleRedirectResponse` returns early for any redirect carrying
+ * `options.href`. Both leave a story more forgiving than the wire, never
+ * stricter.
  */
 function unwrapServerResult(returned: any) {
   const unwrapped = returned.result || returned.error;

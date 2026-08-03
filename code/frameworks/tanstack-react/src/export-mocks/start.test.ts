@@ -182,6 +182,20 @@ describe('createServerFn delegation', () => {
     expect((error as any).options.to).toBe('/after');
   });
 
+  /**
+   * `redirect({ throw: true })` and a redirecting server middleware both reach
+   * the envelope's `error` field rather than `result`, which is the other half
+   * of the `result || error` unwrap the real server handler performs.
+   */
+  it('throws a redirect the handler threw rather than resolving it', async () => {
+    const call = createServerFn({ method: 'GET' }).handler(() => {
+      throw redirect({ to: '/after-throw' });
+    });
+    const error = await call().catch((thrown: unknown) => thrown);
+    expect(isRedirect(error)).toBe(true);
+    expect((error as any).options.to).toBe('/after-throw');
+  });
+
   it('still copies a non-Response result rather than sharing the handler reference', async () => {
     const produced = { n: 1 };
     const call = createServerFn({ method: 'GET' }).handler(() => produced);
