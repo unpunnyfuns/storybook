@@ -720,7 +720,12 @@ function warnAboutGlobalFunctionMiddleware(options: any) {
  * Neither branch composed here had that, and a merge is the wrong place to add
  * behavior that neither side shipped.
  */
-export const createStart = (getOptions?: () => any) => {
+export const createStart = (
+  getOptions?: () => any
+): {
+  getOptions: () => Promise<any>;
+  createMiddleware: typeof clientCreateMiddleware;
+} => {
   const result = getOptions ? getOptions() : {};
 
   if (result && typeof result.then === 'function') {
