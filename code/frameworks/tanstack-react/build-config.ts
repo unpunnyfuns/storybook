@@ -24,6 +24,10 @@ const config: BuildEntries = {
         exportEntries: ['./start'],
         entryPoint: './src/export-mocks/start.ts',
       },
+      {
+        exportEntries: ['./spies'],
+        entryPoint: './src/export-mocks/spies.ts',
+      },
     ],
     node: [
       {
