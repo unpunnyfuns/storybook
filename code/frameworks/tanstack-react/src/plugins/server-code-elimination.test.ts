@@ -16,6 +16,22 @@ async function transform(
   return (await handler.call({}, code, id)) as TransformResult;
 }
 
+const SERVER_FN_SOURCE = `
+import { createServerFn } from '@tanstack/react-start';
+export const probe = createServerFn().handler(async () => 'secret');
+`;
+
+async function transformThroughFilter(code: string, id: string) {
+  const plugin = serverCodeEliminationPlugin() as any;
+  const { filter, handler } = plugin.transform;
+  const included = filter.id.include.some((re: RegExp) => re.test(id));
+  const excluded = (filter.id.exclude ?? []).some((re: RegExp) => re.test(id));
+  if (!included || excluded || !filter.code.test(code)) {
+    return null;
+  }
+  return handler.call({}, code, id);
+}
+
 describe('serverCodeEliminationPlugin', () => {
   describe('skipping (returns null)', () => {
     it('skips non-JS/TS file extensions', async () => {
@@ -351,6 +367,34 @@ describe('serverCodeEliminationPlugin', () => {
       expect(result).not.toBeNull();
       expect(result!.code).toContain('useSomething');
       expect(result!.code).not.toContain('createServerOnlyFn');
+    });
+  });
+
+  describe('transform.filter id coverage', () => {
+    it('transforms .jsx sources', async () => {
+      const result = await transformThroughFilter(SERVER_FN_SOURCE, '/app/src/routes/x.jsx');
+      expect(result?.code).toContain('__sb_fn()');
+    });
+
+    it('transforms ids carrying a Vite query', async () => {
+      const result = await transformThroughFilter(
+        SERVER_FN_SOURCE,
+        '/app/src/routes/x.tsx?v=abc123'
+      );
+      expect(result?.code).toContain('__sb_fn()');
+    });
+
+    it('transforms code-splitter ids', async () => {
+      const result = await transformThroughFilter(
+        SERVER_FN_SOURCE,
+        '/app/src/routes/x.tsx?tsr-split=component'
+      );
+      expect(result?.code).toContain('__sb_fn()');
+    });
+
+    it('still skips node_modules', async () => {
+      const result = await transformThroughFilter(SERVER_FN_SOURCE, '/app/node_modules/lib/x.tsx');
+      expect(result).toBeNull();
     });
   });
 });
