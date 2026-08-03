@@ -29,6 +29,8 @@ export * from './types.ts';
 export type {
   CreateStoryRouteOptions,
   IsRoute,
+  RouteOverrideOptions,
+  RouteTreeOverrides,
   StoryRouteFileOptions,
   StoryRouteOptions,
   RouterParameters,
