@@ -44,26 +44,44 @@ function navigationEnabled() {
 export const useNavigate = fn(((opts?: Parameters<typeof _useNavigate>[0]) => {
   const navigate = _useNavigate(opts);
 
-  return (options: Parameters<ReturnType<typeof _useNavigate>>[0]) => {
-    onNavigate({ to: options?.to as string | undefined });
-    return navigationEnabled() ? navigate(options) : Promise.resolve();
-  };
-}) as typeof _useNavigate).mockName('@tanstack/react-router::useNavigate');
-export const useRouter = fn((() => {
-  const router = _useRouter();
-
-  return new Proxy(router, {
-    get(target, property, receiver) {
-      if (property !== 'navigate') {
-        return Reflect.get(target, property, receiver);
-      }
-
-      return (options: Parameters<typeof target.navigate>[0]) => {
-        onNavigate({ to: options?.to as string | undefined });
-        return navigationEnabled() ? target.navigate(options) : Promise.resolve();
-      };
+  // The real hook returns a `useCallback`, and stories put the result in
+  // effect dependency arrays, so the wrapper has to be memoized too or every
+  // render re-fires those effects.
+  return React.useMemo(
+    () => (options: Parameters<ReturnType<typeof _useNavigate>>[0]) => {
+      onNavigate({ to: options?.to as string | undefined });
+      return navigationEnabled() ? navigate(options) : Promise.resolve();
     },
-  });
+    [navigate]
+  );
+}) as typeof _useNavigate).mockName('@tanstack/react-router::useNavigate');
+export const useRouter = fn(((opts?: Parameters<typeof _useRouter>[0]) => {
+  const router = _useRouter(opts);
+
+  // Same reason as `useNavigate`: the real hook returns the same context
+  // object on every render, so the proxy is built once per router. Outside a
+  // provider the real hook returns nothing, and a proxy needs an object, so
+  // pass that case straight through and let the story fail the way it did
+  // before rather than on a `TypeError` from here.
+  return React.useMemo(() => {
+    if (!router) {
+      return router;
+    }
+
+    // Built once rather than inside the trap, so that reading
+    // `router.navigate` twice yields the same function, as it does on the
+    // real router.
+    const navigate = (options: Parameters<typeof router.navigate>[0]) => {
+      onNavigate({ to: options?.to as string | undefined });
+      return navigationEnabled() ? router.navigate(options) : Promise.resolve();
+    };
+
+    return new Proxy(router, {
+      get(target, property, receiver) {
+        return property === 'navigate' ? navigate : Reflect.get(target, property, receiver);
+      },
+    });
+  }, [router]);
 }) as typeof _useRouter).mockName('@tanstack/react-router::useRouter');
 export const useBlocker = fn(_useBlocker).mockName('@tanstack/react-router::useBlocker');
 export const useSearch = fn(_useSearch).mockName('@tanstack/react-router::useSearch');
@@ -102,7 +120,9 @@ export const Link = ({
   [key: string]: unknown;
 }) => {
   const location = useLocation();
-  const router = _useRouter();
+  // `warn: false` because `useLocation` above already fails loudly outside a
+  // provider; this call must not add a second, earlier complaint.
+  const router = _useRouter({ warn: false });
   return React.createElement(
     'a',
     {
@@ -115,7 +135,7 @@ export const Link = ({
         onNavigate({ to, from: location.href });
 
         if (navigationEnabled()) {
-          router.navigate({ to } as never);
+          router?.navigate({ to } as never);
         }
       },
       ...props,
