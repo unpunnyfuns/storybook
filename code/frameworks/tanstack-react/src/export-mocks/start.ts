@@ -1,6 +1,6 @@
 import React from 'react';
 import { fn } from 'storybook/test';
-import { isRedirect } from '@tanstack/react-router';
+import { isRedirect, useRouter } from '@tanstack/react-router';
 import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
 import { onNavigate } from './spies.ts';
 
@@ -8,6 +8,16 @@ export * from '@tanstack/start-client-core';
 export * from '@tanstack/react-start';
 
 const START_SERVER_STATE_SYMBOL = Symbol.for('storybook.tanstack-react.start-server.state');
+
+// Stories opt into real navigation with `parameters.tanstack.router.navigate`.
+// The flag travels on a global symbol so every mocked navigation seam reads the
+// same switch; the router mock declares its own reader for the same key, since
+// exporting one from either mock would invent API no real app has.
+const STORY_NAVIGATION_SYMBOL = Symbol.for('storybook.tanstack-react.story-navigation');
+
+function navigationEnabled() {
+  return (globalThis as Record<symbol, unknown>)[STORY_NAVIGATION_SYMBOL] === true;
+}
 
 type RequestOptions<TRegister = unknown> = {
   context?: TRegister extends { server: { requestContext: infer TRequestContext } }
@@ -565,6 +575,11 @@ export const getValidatedQuery = createNamedMock(
 export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
   serverFn: T
 ): (...args: Parameters<T>) => ReturnType<T> {
+  // Stories run inside a real RouterProvider (see routing/decorator.tsx), so a
+  // live router is available here. `warn: false` keeps the hook usable outside
+  // one, where the recording path still works and navigation is skipped.
+  const router = useRouter({ warn: false });
+
   return React.useCallback(
     async (...args: Parameters<T>) => {
       try {
@@ -577,24 +592,27 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
         return res;
       } catch (err) {
         if (isRedirect(err)) {
-          // Stories do run inside a real RouterProvider (see routing/decorator.tsx),
-          // so a live router is available here. This seam deliberately does not call
-          // router.navigate() anyway: navigation is blocked on purpose so the story
-          // stays on screen, and the attempt is recorded on the onNavigate spy
-          // instead (see spies.ts). What is not reproduced is the real
-          // implementation's router.resolveRedirect() (relative-target resolution)
-          // and its `_fromLocation` stamping; only the redirect's own `to` (or
-          // `href`, for the href-only redirect form) is forwarded, normalized to
-          // match the spy's `{ to, from }` contract the same way react-router.ts's
-          // Navigate does.
+          // The attempt is always recorded on the onNavigate spy (see spies.ts),
+          // normalized to the spy's `{ to, from }` contract the same way
+          // react-router.ts's Navigate does, falling back to `href` for the
+          // href-only redirect form. Whether the story then moves is the story's
+          // call: without `parameters.tanstack.router.navigate` it stays on
+          // screen, and with it the real implementation runs, resolving the
+          // redirect against the router and stamping `_fromLocation`.
           onNavigate({ to: (err.options.to as string) || err.options.href });
-          return undefined;
+
+          if (!navigationEnabled() || !router) {
+            return undefined;
+          }
+
+          err.options._fromLocation = router.stores.location.state;
+          return router.navigate(router.resolveRedirect(err).options);
         }
 
         throw err;
       }
     },
-    [serverFn]
+    [router, serverFn]
   ) as any;
 }
 

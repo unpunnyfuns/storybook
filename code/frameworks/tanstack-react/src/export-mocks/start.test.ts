@@ -1,11 +1,31 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import React from 'react';
-import { redirect } from '@tanstack/react-router';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  redirect,
+  RouterProvider,
+} from '@tanstack/react-router';
 
 import { onNavigate } from './spies.ts';
 import { createServerFn, useServerFn } from './start.ts';
+
+const STORY_NAVIGATION_SYMBOL = Symbol.for('storybook.tanstack-react.story-navigation');
+
+async function withStoryNavigation<T>(run: () => Promise<T>) {
+  const globals = globalThis as Record<symbol, unknown>;
+  globals[STORY_NAVIGATION_SYMBOL] = true;
+
+  try {
+    return await run();
+  } finally {
+    delete globals[STORY_NAVIGATION_SYMBOL];
+  }
+}
 
 type MockCreateServerFnBuilder = {
   validator: (validator: (input: unknown) => unknown) => {
@@ -34,6 +54,36 @@ describe('useServerFn', () => {
 
     render(React.createElement(Probe));
     return () => call!();
+  }
+
+  async function renderProbeInRouter(serverFn: () => Promise<unknown>) {
+    let call: (() => Promise<unknown>) | undefined;
+
+    function Probe() {
+      call = useServerFn(serverFn);
+      return null;
+    }
+
+    const root = createRootRoute();
+    const index = createRoute({ path: '/', getParentRoute: () => root, component: Probe });
+    const after = createRoute({
+      path: '/after',
+      getParentRoute: () => root,
+      component: () => null,
+    });
+    root.addChildren([index, after]);
+
+    const router = createRouter({
+      routeTree: root,
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    });
+
+    await act(async () => {
+      render(React.createElement(RouterProvider, { router } as any));
+    });
+    await waitFor(() => expect(call).toBeDefined());
+
+    return { router, call: () => act(async () => call!()) };
   }
 
   it('navigates instead of rejecting when a server function throws a redirect', async () => {
@@ -75,5 +125,29 @@ describe('useServerFn', () => {
     const call = renderProbe(async () => 'ok');
 
     await expect(call()).resolves.toBe('ok');
+  });
+
+  it('records a redirect without navigating when the story has not opted in', async () => {
+    onNavigate.mockClear();
+    const { router, call } = await renderProbeInRouter(async () => {
+      throw redirect({ to: '/after' });
+    });
+
+    await call();
+
+    expect(onNavigate).toHaveBeenCalledWith({ to: '/after' });
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('records a redirect and navigates when the story opts in', async () => {
+    onNavigate.mockClear();
+    const { router, call } = await renderProbeInRouter(async () => {
+      throw redirect({ to: '/after' });
+    });
+
+    await withStoryNavigation(() => call());
+
+    expect(onNavigate).toHaveBeenCalledWith({ to: '/after' });
+    expect(router.state.location.pathname).toBe('/after');
   });
 });
