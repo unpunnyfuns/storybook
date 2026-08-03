@@ -20,14 +20,13 @@ export type FrameworkOptions = {
    * them, so that code survives into the browser bundle.
    *
    * Surviving into the bundle is not the same as the chain running. Executing a
-   * server function the way TanStack does, with its middleware chain and its
-   * validators, additionally requires the `createServerFn` mock that delegates
-   * to the real builder, which is not part of this change. Against the current
-   * mock, enabling this means a handler body executes with no middleware
-   * context and no input validation: `opts.context` is `undefined`, and
-   * unvalidated input reaches the handler. That is a quieter failure than the
-   * no-op spy the handler is replaced with while this is off, so leave it off
-   * until the delegating mock lands.
+   * server function the way TanStack does also requires the `createServerFn`
+   * mock that delegates to the real builder, which ships in the same release as
+   * this option but is a separate change. In a build that has this option
+   * without that mock, a handler body executes with no middleware context and
+   * no input validation: `opts.context` is `undefined` and unvalidated input
+   * reaches the handler, which is a quieter failure than the no-op spy the
+   * handler is replaced with while this is off.
    *
    * Off by default. Enabling it only suspends those strips; it does not make
    * the kept code browser-safe. Everything a handler or a middleware reaches
@@ -38,7 +37,10 @@ export type FrameworkOptions = {
    *
    * Unaffected by this option, and still rewritten the way they are today:
    * `createServerOnlyFn`, `createIsomorphicFn`, the `server` option of route
-   * factories, and `*.server.ts` modules.
+   * factories, and `*.server.ts` modules. A server function's own
+   * `.validator()` is also still stripped, so it does not run in either mode,
+   * unlike a `createMiddleware()` chain's `inputValidator`, which this option
+   * does restore.
    */
   executeServerFunctions?: boolean;
 };
