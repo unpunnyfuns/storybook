@@ -31,3 +31,33 @@ export async function roundTrip<T>(value: T): Promise<T> {
   });
   return fromCrossJSON(serialized, { plugins: getDefaultSerovalPlugins() }) as T;
 }
+
+/**
+ * Stands in for the RPC stub TanStack's compiler generates. The real one
+ * serializes and fetches; this one serializes and calls the server half in
+ * process, so no request leaves the browser.
+ *
+ * Only `data` and `context` cross the boundary, because only they cross the
+ * real one: serverFnFetcher's serializePayload puts exactly those two keys on
+ * the wire, and the server handler reconstructs `method` itself rather than
+ * reading it from the payload. The argument the client middleware chain hands a
+ * transport is much wider than that, carrying `extractedFn`, `serverFn`,
+ * `middleware` and `inputValidator` alongside them, and every one of those is a
+ * function seroval refuses to serialize. Round-tripping the whole argument
+ * would therefore throw on every call.
+ *
+ * The mutable holder is deliberate: the transport needs a reference to the
+ * object `.handler()` returns, which does not exist until after `.handler()` is
+ * called. The transport is only invoked later, so binding afterwards is safe.
+ */
+export function createInProcessTransport() {
+  const built: { current?: { __executeServer: (opts: any) => Promise<any> } } = {};
+
+  const transport = async (payload: any) => {
+    const sent = await roundTrip({ data: payload.data, context: payload.context });
+    const result = await built.current!.__executeServer({ ...sent, method: payload.method });
+    return roundTrip(result);
+  };
+
+  return { transport, bind: (fn: typeof built.current) => (built.current = fn) };
+}

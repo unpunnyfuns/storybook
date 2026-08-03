@@ -1,6 +1,10 @@
 import React from 'react';
 import { fn } from 'storybook/test';
-import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
+import {
+  type createServerFn as _createServerFn,
+  createServerFn as realCreateServerFn,
+} from '@tanstack/start-client-core';
+import { createInProcessTransport } from './server-fn-transport.ts';
 import { onNavigate } from './spies.ts';
 
 export * from '@tanstack/start-client-core';
@@ -571,50 +575,55 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
   );
 }
 
-function createMockServerFnBuilder(): any {
-  const builder = () => createMockServerFnBuilder();
+/**
+ * Wraps a real `createServerFn` builder so every chain step stays wrapped and
+ * `.handler()` ends in a spy.
+ *
+ * The real builder is `Object.assign(fun, res)`: a callable that also carries
+ * `options`, `middleware`, `inputValidator` and `handler`, and `middleware()`
+ * additionally tags its result with a symbol the next `middleware()` call reads
+ * back. Copying the real builder onto the wrapper first preserves all of that,
+ * including symbol keys, so a wrapped builder can still be passed into another
+ * builder's `middleware([...])`. The overrides then re-wrap, because each real
+ * chain method returns a brand new builder that would otherwise escape the
+ * wrapper and take `.handler()` with it.
+ *
+ * `validator` is not on the real builder. It is the name the Storybook mock has
+ * always exposed, and stories written against it must keep working, so it stays
+ * as an alias for `inputValidator`.
+ */
+function wrapServerFnBuilder(builder: any): any {
+  const wrapped = (options?: any) => wrapServerFnBuilder(builder(options));
 
-  let _storedOptions: any;
+  return Object.assign(wrapped, builder, {
+    middleware: (middleware: Array<any>) => wrapServerFnBuilder(builder.middleware(middleware)),
+    inputValidator: (validator: any) => wrapServerFnBuilder(builder.inputValidator(validator)),
+    validator: (validator: any) => wrapServerFnBuilder(builder.inputValidator(validator)),
+    handler: (userHandler?: (...args: Array<any>) => any) => {
+      const { transport, bind } = createInProcessTransport();
+      const real = builder.handler(transport, userHandler);
+      bind(real);
 
-  builder.options = (opts?: any) => {
-    _storedOptions = opts;
-    return builder;
-  };
-
-  builder.middleware = () => {
-    return createMockServerFnBuilder();
-  };
-
-  builder.inputValidator = () => {
-    return createMockServerFnBuilder();
-  };
-
-  builder.validator = () => {
-    return createMockServerFnBuilder();
-  };
-
-  builder.handler = (handlerFn?: (...args: any[]) => any) => {
-    const mock = fn().mockName('@tanstack/start-client-core::createServerFn.handler()');
-
-    if (handlerFn) {
-      mock.mockImplementation(async (opts?: any) => handlerFn(opts));
-    }
-
-    return mock;
-  };
-
-  (builder as any)._getOptions = () => _storedOptions;
-
-  return builder;
+      return fn(real).mockName('@tanstack/start-client-core::createServerFn.handler()');
+    },
+  });
 }
 
-// Override `createServerFn` from start-client-core with our mock version
+/**
+ * Delegates to the real `createServerFn` instead of reimplementing it, so a
+ * story runs the middleware chain and the input validator the app declared.
+ *
+ * The real builder expects the compiler to have supplied an RPC stub as the
+ * first argument to `.handler()`; nothing compiles a Storybook preview, so the
+ * in-process transport stands in for it and calls the server half directly.
+ *
+ * `fn(real)` rather than `fn().mockImplementation(real)` is deliberate. Vitest
+ * restores the implementation a mock was constructed with on `mockReset`, and
+ * Storybook resets mocks between stories, so only the constructed form keeps
+ * running the real chain in the second story a user visits.
+ */
 export const createServerFn: typeof _createServerFn = (options?: any) => {
-  const builder = createMockServerFnBuilder();
-  if (options !== undefined) {
-    builder.options(options);
-  }
-  return builder;
+  return wrapServerFnBuilder(realCreateServerFn(options));
 };
 
 export const Link = ({
