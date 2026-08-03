@@ -149,6 +149,41 @@ describe('serverCodeEliminationPlugin', () => {
     });
   });
 
+  describe('validator stripping', () => {
+    it('strips .validator() from createMiddleware chains', async () => {
+      const code = `
+import { createMiddleware } from '@tanstack/react-start';
+import { serverSchema } from './schemas.server';
+export const mw = createMiddleware().validator(serverSchema).server(async ({ next }) => next());
+`;
+      const result = await transform(code, '/app/src/mw.ts');
+      expect(result?.code).not.toContain('validator');
+      expect(result?.code).not.toContain('serverSchema');
+    });
+
+    it('strips .validator() from createServerFn chains', async () => {
+      const code = `
+import { createServerFn } from '@tanstack/react-start';
+import { serverSchema } from './schemas.server';
+export const fn2 = createServerFn().validator(serverSchema).handler(async () => 'ok');
+`;
+      const result = await transform(code, '/app/src/fn.ts');
+      expect(result?.code).not.toContain('validator');
+      expect(result?.code).not.toContain('serverSchema');
+    });
+
+    it('strips .inputValidator() from createServerFn chains', async () => {
+      const code = `
+import { createServerFn } from '@tanstack/react-start';
+import { serverSchema } from './schemas.server';
+export const fn3 = createServerFn().inputValidator(serverSchema).handler(async () => 'ok');
+`;
+      const result = await transform(code, '/app/src/fn.ts');
+      expect(result?.code).not.toContain('inputValidator');
+      expect(result?.code).not.toContain('serverSchema');
+    });
+  });
+
   describe('createIsomorphicFn()', () => {
     it('wraps .client(fn) with a spy carrying the original impl', async () => {
       const code = [
