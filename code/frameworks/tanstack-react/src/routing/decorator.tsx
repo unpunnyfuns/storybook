@@ -23,6 +23,7 @@ import {
 } from './duplicate-tree.ts';
 import { isRoute } from './utils.ts';
 import { normalizeFileRoutePath } from './path-utils.ts';
+import { setStoryNavigation } from '../story-navigation.ts';
 
 interface TanStackRouterStoryProps {
   Story: ComponentType;
@@ -48,6 +49,11 @@ const StoryFromContext: ComponentType = () => {
 };
 
 export const tanstackRouteDecorator: Decorator = (Story, context) => {
+  // Set on every story, including back to undefined, so one story's setting
+  // cannot leak into the next: Storybook keeps preview modules alive across
+  // navigations.
+  setStoryNavigation(context.parameters.tanstack?.router?.navigate);
+
   return <TanStackRouterStory Story={Story} context={context} />;
 };
 

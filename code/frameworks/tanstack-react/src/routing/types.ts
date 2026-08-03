@@ -186,6 +186,20 @@ export interface RouterParameters<
   context?: Record<string, unknown>;
 
   /**
+   * Whether navigation actually happens in this story, or is only recorded on
+   * the `onNavigate` spy.
+   *
+   * Off by default, and off applies to every path: `Link`, `Navigate`,
+   * `useNavigate` and `useRouter().navigate` all record and leave the story on
+   * screen. On, all four navigate for real and still record.
+   *
+   * Turn it on for a story that asserts on where navigation lands. Note that
+   * navigating to a route outside the mounted tree renders a not found, the
+   * same as it would in the app.
+   */
+  navigate?: boolean;
+
+  /**
    *
    */
   useRouterContext?: ({ storyContext }: { storyContext: Parameters<Decorator>[1] }) => AnyContext;
