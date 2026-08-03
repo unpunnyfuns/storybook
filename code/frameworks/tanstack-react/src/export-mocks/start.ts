@@ -1,5 +1,6 @@
 import React from 'react';
 import { fn } from 'storybook/test';
+import { isRedirect } from '@tanstack/react-router';
 import type { createServerFn as _createServerFn } from '@tanstack/start-client-core';
 import { onNavigate } from './spies.ts';
 
@@ -565,9 +566,30 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
   serverFn: T
 ): (...args: Parameters<T>) => ReturnType<T> {
   return React.useCallback(
-    (...args: Parameters<T>) => serverFn(...args) as ReturnType<T>,
+    async (...args: Parameters<T>) => {
+      try {
+        const res = await serverFn(...args);
+
+        if (isRedirect(res)) {
+          throw res;
+        }
+
+        return res;
+      } catch (err) {
+        if (isRedirect(err)) {
+          // Real useServerFn resolves the redirect against a live router (relative
+          // targets, _fromLocation) and calls router.navigate(). This mock has no
+          // live router, so it forwards the raw redirect options to the onNavigate
+          // spy instead, matching how Link/Navigate report attempted navigation.
+          onNavigate(err.options);
+          return undefined;
+        }
+
+        throw err;
+      }
+    },
     [serverFn]
-  );
+  ) as any;
 }
 
 function createMockServerFnBuilder(): any {
