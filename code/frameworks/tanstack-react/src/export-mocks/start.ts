@@ -1,4 +1,5 @@
 import React from 'react';
+import { once } from 'storybook/internal/client-logger';
 import { fn } from 'storybook/test';
 import {
   type createServerFn as _createServerFn,
@@ -651,6 +652,30 @@ export const notFound = () => {
   throw new Error('Not found');
 };
 
+/**
+ * Global function middleware cannot run in a Storybook build, so say so instead
+ * of silently dropping it.
+ *
+ * The real chain reads it from `getStartOptions()`, which is built on
+ * `createIsomorphicFn`. The runtime ships that as an explicit dummy that
+ * discards both implementations and relies on a compiler transform which never
+ * runs over `node_modules`, so the call returns `undefined` no matter what
+ * `createStart` was given. Nothing this framework can do from the outside
+ * changes that, which is why this is a warning and a documented escape hatch
+ * rather than an implementation.
+ */
+function warnAboutGlobalFunctionMiddleware(options: any) {
+  if (!Array.isArray(options?.functionMiddleware) || options.functionMiddleware.length === 0) {
+    return;
+  }
+
+  once.warn(
+    'TanStack: the global functionMiddleware passed to createStart() does not run in Storybook, ' +
+      'so server functions receive no context from it. Supply the context that middleware would ' +
+      'have produced with the parameters.tanstack.start.context story parameter.'
+  );
+}
+
 // TanStack Start server entry
 export const createStart = (getOptions?: () => any) => {
   const result = getOptions ? getOptions() : {};
@@ -658,9 +683,11 @@ export const createStart = (getOptions?: () => any) => {
   if (result && typeof result.then === 'function') {
     Promise.resolve(result).then((resolved) => {
       browserGlobals.__TSS_START_OPTIONS__ = resolved;
+      warnAboutGlobalFunctionMiddleware(resolved);
     });
   } else {
     browserGlobals.__TSS_START_OPTIONS__ = result;
+    warnAboutGlobalFunctionMiddleware(result);
   }
 
   return {};

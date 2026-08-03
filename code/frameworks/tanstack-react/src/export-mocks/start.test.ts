@@ -1,7 +1,12 @@
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { once } from 'storybook/internal/client-logger';
+
+import { setStoryStartContext } from '../story-start-context.ts';
 import { createMiddleware, createServerFn as createServerFnMock, createStart } from './start.ts';
 import { getStartContext } from './start-storage-context.ts';
+
+vi.mock('storybook/internal/client-logger');
 
 /**
  * `plugins/module-interception.ts` redirects this specifier to our own mock in
@@ -54,6 +59,7 @@ describe('createServerFn delegation', () => {
 
   afterEach(() => {
     delete (globalThis as any).__TSS_START_OPTIONS__;
+    setStoryStartContext(undefined);
   });
 
   it('runs the client middleware phase', async () => {
@@ -98,6 +104,47 @@ describe('createServerFn delegation', () => {
     call.mockResolvedValue('mocked');
     call.mockReset();
     await expect(call()).resolves.toBe('real');
+  });
+
+  it("passes the story's start context to the handler", async () => {
+    setStoryStartContext({ user: 'ada' });
+    const call = createServerFn({ method: 'GET' }).handler(({ context }: any) => context.user);
+    await expect(call()).resolves.toBe('ada');
+  });
+});
+
+describe('global function middleware', () => {
+  afterEach(() => {
+    delete (globalThis as any).__TSS_START_OPTIONS__;
+  });
+
+  it('warns that configured global middleware will not run', () => {
+    createStart(() => ({
+      functionMiddleware: [createMiddleware({ type: 'function' })],
+    }));
+    expect(once.warn).toHaveBeenCalledWith(expect.stringContaining('functionMiddleware'));
+  });
+
+  it('does not warn when no global middleware is configured', () => {
+    createStart(() => ({}));
+    expect(once.warn).not.toHaveBeenCalled();
+  });
+
+  it('warns when the config function is async', async () => {
+    createStart(async () => ({
+      functionMiddleware: [createMiddleware({ type: 'function' })],
+    }));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(once.warn).toHaveBeenCalledWith(expect.stringContaining('functionMiddleware'));
+  });
+
+  it('warns once per createStart call', () => {
+    createStart(() => ({
+      functionMiddleware: [createMiddleware({ type: 'function' })],
+    }));
+    expect(once.warn).toHaveBeenCalledTimes(1);
   });
 });
 
