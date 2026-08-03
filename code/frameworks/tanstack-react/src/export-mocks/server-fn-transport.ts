@@ -17,13 +17,17 @@ import { fromCrossJSON, toCrossJSONAsync } from 'seroval';
  * directions of a single in-process round trip, it uses the toCrossJSONAsync
  * and fromCrossJSON pair, which is the one the real code actually matches.
  *
- * getDefaultSerovalPlugins() is read fresh on every call rather than cached.
- * It derives from getStartOptions().serializationAdapters, and createStart()
- * writes serializationAdapters to window.__TSS_START_OPTIONS__ per story,
- * while Storybook keeps this module alive across story navigations. Caching
- * the plugin list once would risk serving one story's adapters to the next.
- * The read is a cheap array spread (getDefaultSerovalPlugins.ts), so there is
- * no cost to paying it on every call.
+ * getDefaultSerovalPlugins() is read fresh on every call rather than cached,
+ * though today that read is constant. It derives from
+ * getStartOptions()?.serializationAdapters, and getStartOptions is the same
+ * dead createIsomorphicFn stub that makes global function middleware
+ * unreachable, so a story's custom serialization adapters never arrive here
+ * and only router-core's defaultSerovalPlugins apply. createStart() does write
+ * __TSS_START_OPTIONS__ per story, so if that stub is ever intercepted the
+ * list becomes per-story and a cache would serve one story's adapters to the
+ * next, while Storybook keeps this module alive across navigations. The read
+ * is a cheap array spread, so paying it every call costs nothing and removes
+ * the trap in advance.
  */
 export async function roundTrip<T>(value: T): Promise<T> {
   const serialized = await toCrossJSONAsync(value, {
