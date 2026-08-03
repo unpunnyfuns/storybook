@@ -3,7 +3,6 @@ export * from '@tanstack/react-router';
 
 import { fn } from 'storybook/test';
 import React from 'react';
-import { useEffect } from 'storybook/internal/preview-api';
 
 import {
   useNavigate as _useNavigate,
@@ -47,8 +46,15 @@ export const useCanGoBack = fn(_useCanGoBack).mockName('@tanstack/react-router::
 export const useLinkProps = fn(_useLinkProps).mockName('@tanstack/react-router::useLinkProps');
 
 export const Navigate: typeof _Navigate = ({ to, href }) => {
-  useEffect(() => {
-    onNavigate({ to: (to as string) || href });
+  const previousDestinationRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    const destination = (to as string) || href;
+    if (previousDestinationRef.current === destination) {
+      return;
+    }
+    previousDestinationRef.current = destination;
+    onNavigate({ to: destination });
   }, [to, href]);
 
   return null;

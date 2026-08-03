@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment happy-dom
+import { describe, expect, it, beforeEach } from 'vitest';
 import { createRootRoute } from '@tanstack/react-router';
+import { renderToString } from 'react-dom/server';
+import { render } from '@testing-library/react';
+import React from 'react';
 
-import { createFileRoute } from './react-router.ts';
+import { createFileRoute, Navigate } from './react-router.ts';
+import { onNavigate } from './spies.ts';
 
 const build = (path: string) => {
   const root = createRootRoute();
@@ -109,5 +114,27 @@ describe('createFileRoute', () => {
 
     expect(Route.options.path).toBe('/');
     expect(Route.options.fullPath).toBe('/');
+  });
+});
+
+describe('Navigate', () => {
+  beforeEach(() => {
+    onNavigate.mockClear();
+  });
+
+  it('renders outside a storybook hooks context without throwing', () => {
+    expect(() => renderToString(React.createElement(Navigate, { to: '/somewhere' }))).not.toThrow();
+  });
+
+  it('calls onNavigate once under StrictMode double-invoked effects', () => {
+    render(
+      React.createElement(
+        React.StrictMode,
+        null,
+        React.createElement(Navigate, { to: '/somewhere' })
+      )
+    );
+
+    expect(onNavigate).toHaveBeenCalledOnce();
   });
 });
