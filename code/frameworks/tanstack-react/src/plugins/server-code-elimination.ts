@@ -27,8 +27,21 @@ const ROUTE_FACTORIES = new Set([
 const ANY_PATTERN_RE =
   /\b(createServerFn|createMiddleware|createIsomorphicFn|createServerOnlyFn|createClientOnlyFn|createFileRoute|createRootRoute|createRootRouteWithContext|createRoute)\b/;
 
-export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] } = {}): Plugin {
+export interface ServerCodeEliminationOptions {
+  /** Files whose ids contain any of these substrings are left untouched. */
+  excludeFiles?: string[];
+  /**
+   * Keep `createServerFn().handler()` and the `server` / `inputValidator`
+   * phases of `createMiddleware()` in the bundle instead of stripping them.
+   * Whether that code then runs as a chain is up to the `createServerFn` mock.
+   * See `FrameworkOptions.executeServerFunctions`.
+   */
+  executeServerFunctions?: boolean;
+}
+
+export function serverCodeEliminationPlugin(options: ServerCodeEliminationOptions = {}): Plugin {
   const excludeFiles = options.excludeFiles ?? [];
+  const executeServerFunctions = options.executeServerFunctions ?? false;
 
   return {
     name: 'storybook:tanstack-react:server-code-elimination',
@@ -67,7 +80,7 @@ export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] }
           parserOpts: {
             plugins: ['typescript', 'jsx'],
           },
-          plugins: [() => serverCodeElimination(state)],
+          plugins: [() => serverCodeElimination(state, executeServerFunctions)],
           sourceMaps: true,
           configFile: false,
           babelrc: false,
@@ -88,7 +101,8 @@ export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] }
 
 // todo make storybook/internal/babel export PluginObj
 function serverCodeElimination(
-  state: TransformState
+  state: TransformState,
+  executeServerFunctions: boolean
 ): NonNullable<NonNullable<Parameters<typeof transformSync>[1]>['plugins']>[number] {
   /** No-op spy for server-side code */
   function sbFnCall() {
@@ -162,8 +176,12 @@ function serverCodeElimination(
               return;
             }
 
-            // createServerFn()...validator(fn) / .inputValidator(fn) → strip call
+            // createServerFn()...validator(fn) / .inputValidator(fn) → strip call,
+            // unless the handler is meant to run in the browser. Stripping the
+            // validator while keeping the handler would let unvalidated input
+            // reach it, which is the one combination neither mode should produce.
             if (
+              !executeServerFunctions &&
               resolves(root.rootName, 'createServerFn') &&
               (methodName === 'validator' || methodName === 'inputValidator') &&
               SERVER_FN_RE.test(state.code)
@@ -175,12 +193,17 @@ function serverCodeElimination(
               return;
             }
 
-            // createServerFn()...handler(fn) → replace handler arg with fn() spy
+            // createServerFn()...handler(fn) → replace handler arg with fn() spy,
+            // unless the handler is meant to run in the browser
             if (
               methodName === 'handler' &&
               resolves(root.rootName, 'createServerFn') &&
               SERVER_FN_RE.test(state.code)
             ) {
+              if (executeServerFunctions) {
+                return;
+              }
+
               const handlerArg = node.arguments[0];
               if (handlerArg) {
                 if (t.isIdentifier(handlerArg)) {
@@ -195,12 +218,23 @@ function serverCodeElimination(
               return;
             }
 
-            // createMiddleware()...server(fn) / .inputValidator(fn) / .validator(fn) → strip call
+            // createMiddleware()...server(fn) / .inputValidator(fn) → strip call.
+            // Kept when server functions run in the browser: a handler that runs
+            // without them would see none of the context its middleware provides.
+            //
+            // `.validator` is stripped either way, and that asymmetry is
+            // deliberate. The real `createMiddleware` builder has no `validator`
+            // method at all, only `inputValidator`, so a chain that calls it
+            // works today purely because this strip deletes the call at build
+            // time. Letting it survive under the option would throw
+            // "createMiddleware(...).validator is not a function" at module
+            // evaluation, taking down the whole story file rather than one
+            // server function.
             if (resolves(root.rootName, 'createMiddleware') && MIDDLEWARE_RE.test(state.code)) {
               if (
-                methodName === 'server' ||
-                methodName === 'inputValidator' ||
-                methodName === 'validator'
+                methodName === 'validator' ||
+                (!executeServerFunctions &&
+                  (methodName === 'server' || methodName === 'inputValidator'))
               ) {
                 if (t.isMemberExpression(path.node.callee)) {
                   path.replaceWith(path.node.callee.object);

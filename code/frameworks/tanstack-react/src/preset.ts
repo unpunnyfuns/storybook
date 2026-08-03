@@ -8,6 +8,7 @@ import { viteFinal as reactViteFinal } from '@storybook/react-vite/preset';
 import { serverCodeEliminationPlugin } from './plugins/server-code-elimination.ts';
 import { serverOnlyStubPlugin } from './plugins/server-only-stub.ts';
 import { moduleInterceptionPlugin } from './plugins/module-interception.ts';
+import type { FrameworkOptions } from './types.ts';
 
 export const core: PresetProperty<'core'> = async (config, options) => {
   const framework = await options.presets.apply('framework');
@@ -78,10 +79,17 @@ export const viteFinal: StorybookConfigVite['viteFinal'] = async (config, option
   const routerMockPath = fileURLToPath(
     import.meta.resolve('@storybook/tanstack-react/react-router')
   );
+  const framework = await options.presets.apply('framework');
+  const frameworkOptions: FrameworkOptions =
+    typeof framework === 'string' ? {} : (framework.options ?? {});
+
   const basePlugins = reactConfig.plugins ?? [];
   const plugins = [
     ...basePlugins.filter((p) => !isTanStackStartPlugin(p)),
-    serverCodeEliminationPlugin({ excludeFiles: [dirname(startMockPath)] }),
+    serverCodeEliminationPlugin({
+      excludeFiles: [dirname(startMockPath)],
+      executeServerFunctions: frameworkOptions.executeServerFunctions,
+    }),
     serverOnlyStubPlugin(),
     moduleInterceptionPlugin({ startMockPath, startStorageContextMockPath, routerMockPath }),
   ];

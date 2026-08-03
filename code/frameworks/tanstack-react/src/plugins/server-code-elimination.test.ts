@@ -4,10 +4,12 @@ import { serverCodeEliminationPlugin } from './server-code-elimination.ts';
 
 type TransformResult = { code: string; map?: unknown } | null;
 
+type PluginOptions = Parameters<typeof serverCodeEliminationPlugin>[0];
+
 async function transform(
   code: string,
   id = '/project/src/file.ts',
-  options?: { excludeFiles?: string[] }
+  options?: PluginOptions
 ): Promise<TransformResult> {
   const plugin = serverCodeEliminationPlugin(options);
   const transformOpt = plugin.transform as any;
@@ -30,6 +32,19 @@ async function transformThroughFilter(code: string, id: string) {
     return null;
   }
   return handler.call({}, code, id);
+}
+
+/**
+ * The module source the bundle ends up with. The plugin returns null when it
+ * changed nothing, in which case the original code is what gets bundled.
+ */
+async function transformedCode(
+  code: string,
+  id = '/project/src/file.ts',
+  options?: PluginOptions
+): Promise<string> {
+  const result = await transform(code, id, options);
+  return result?.code ?? code;
 }
 
 describe('serverCodeEliminationPlugin', () => {
@@ -440,6 +455,148 @@ export const f = createIsomorphicFn().client(() => 'CLIENT').server(() => 'SERVE
     it('still skips node_modules', async () => {
       const result = await transformThroughFilter(SERVER_FN_SOURCE, '/app/node_modules/lib/x.tsx');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('executeServerFunctions option', () => {
+    const SERVER_FN = [
+      `import { createServerFn } from '@tanstack/react-start';`,
+      `export const probe = createServerFn().inputValidator(Number).handler(async () => 'secret');`,
+    ].join('\n');
+
+    const MIDDLEWARE = [
+      `import { createMiddleware } from '@tanstack/react-start';`,
+      `export const m = createMiddleware()`,
+      `  .inputValidator((v) => v)`,
+      `  .server(async ({ next }) => next({ context: { user: 'ada' } }));`,
+    ].join('\n');
+
+    it('strips the handler by default', async () => {
+      const result = await transform(SERVER_FN, '/app/src/fn.ts');
+      expect(result).not.toBeNull();
+      expect(result!.code).not.toContain('secret');
+      expect(result!.code).toContain('__sb_fn()');
+    });
+
+    it('keeps the handler and its validator when the option is on', async () => {
+      // Returning null means the plugin rewrote nothing, not that it skipped
+      // the file: the default-behavior twin above rewrites this same source
+      // under this same id.
+      const result = await transform(SERVER_FN, '/app/src/fn.ts', {
+        executeServerFunctions: true,
+      });
+      expect(result).toBeNull();
+
+      const code = await transformedCode(SERVER_FN, '/app/src/fn.ts', {
+        executeServerFunctions: true,
+      });
+      expect(code).toContain('secret');
+      expect(code).toContain('inputValidator');
+      expect(code).not.toContain('__sb_fn()');
+    });
+
+    it('strips the middleware server and inputValidator phases by default', async () => {
+      const result = await transform(MIDDLEWARE, '/app/src/mw.ts');
+      expect(result).not.toBeNull();
+      expect(result!.code).not.toContain('.server(');
+      expect(result!.code).not.toContain('.inputValidator(');
+      expect(result!.code).not.toContain('ada');
+    });
+
+    it('keeps the middleware server and inputValidator phases when the option is on', async () => {
+      const code = await transformedCode(MIDDLEWARE, '/app/src/mw.ts', {
+        executeServerFunctions: true,
+      });
+      expect(code).toContain('.server(');
+      expect(code).toContain('.inputValidator(');
+      expect(code).toContain('ada');
+    });
+
+    it('keeps a handler and its helpers alive when another strip rewrites the same file', async () => {
+      const code = [
+        `import { createFileRoute } from '@tanstack/react-router';`,
+        `import { createServerFn } from '@tanstack/react-start';`,
+        `const helper = () => 'secret';`,
+        `export const probe = createServerFn().handler(async () => helper());`,
+        `export const Route = createFileRoute('/demo')({`,
+        `  component: C,`,
+        `  server: { handler: async () => ({}) },`,
+        `});`,
+        `function C() { return null; }`,
+      ].join('\n');
+      const result = await transform(code, '/app/src/routes/demo.tsx', {
+        executeServerFunctions: true,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.code).not.toMatch(/\bserver:\s*\{/);
+      expect(result!.code).toContain('const helper');
+      expect(result!.code).toContain('secret');
+    });
+
+    it('still strips createServerOnlyFn when the option is on', async () => {
+      const code = [
+        `import { createServerOnlyFn } from '@tanstack/react-start';`,
+        `export const f = createServerOnlyFn(() => 'secret');`,
+      ].join('\n');
+      const result = await transform(code, '/app/src/only.ts', {
+        executeServerFunctions: true,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.code).toContain('__sb_fn()');
+      expect(result!.code).not.toContain('secret');
+    });
+
+    it('still strips the createIsomorphicFn server half when the option is on', async () => {
+      const code = [
+        `import { createIsomorphicFn } from '@tanstack/react-start';`,
+        `export const f = createIsomorphicFn().server(() => 'secret');`,
+      ].join('\n');
+      const result = await transform(code, '/app/src/iso.ts', {
+        executeServerFunctions: true,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.code).toContain('__sb_fn()');
+      expect(result!.code).not.toContain('secret');
+    });
+
+    it('still strips the route server property when the option is on', async () => {
+      const code = [
+        `import { createFileRoute } from '@tanstack/react-router';`,
+        `export const Route = createFileRoute('/demo')({`,
+        `  component: C,`,
+        `  server: { handler: async () => 'secret' },`,
+        `});`,
+        `function C() { return null; }`,
+      ].join('\n');
+      const result = await transform(code, '/app/src/routes/demo.tsx', {
+        executeServerFunctions: true,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.code).not.toMatch(/\bserver:\s*\{/);
+      expect(result!.code).not.toContain('secret');
+    });
+
+    /**
+     * The real `createMiddleware` builder exposes `inputValidator` and no
+     * `validator` at all, so a chain calling `.validator()` only works because
+     * this strip deletes the call before the browser sees it. Keeping it under
+     * the option would throw "createMiddleware(...).validator is not a
+     * function" at module evaluation and take down the whole story file, so
+     * this one strip stays unconditional while the phases beside it do not.
+     */
+    it('still strips a createMiddleware validator when the option is on', async () => {
+      const code = [
+        `import { createMiddleware } from '@tanstack/react-start';`,
+        `export const m = createMiddleware()`,
+        `  .validator((v) => v)`,
+        `  .server(async ({ next }) => next({ context: { user: 'ada' } }));`,
+      ].join('\n');
+      const result = await transform(code, '/app/src/mw.ts', {
+        executeServerFunctions: true,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.code).not.toContain('.validator(');
+      expect(result!.code).toContain('.server(');
     });
   });
 });
