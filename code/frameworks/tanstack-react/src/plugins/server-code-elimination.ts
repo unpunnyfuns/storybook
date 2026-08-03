@@ -27,8 +27,21 @@ const ROUTE_FACTORIES = new Set([
 const ANY_PATTERN_RE =
   /\b(createServerFn|createMiddleware|createIsomorphicFn|createServerOnlyFn|createClientOnlyFn|createFileRoute|createRootRoute|createRootRouteWithContext|createRoute)\b/;
 
-export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] } = {}): Plugin {
+export interface ServerCodeEliminationOptions {
+  /** Files whose ids contain any of these substrings are left untouched. */
+  excludeFiles?: string[];
+  /**
+   * Keep `createServerFn().handler()` and the `server` / `inputValidator`
+   * phases of `createMiddleware()` in the bundle instead of stripping them.
+   * Whether that code then runs as a chain is up to the `createServerFn` mock.
+   * See `FrameworkOptions.executeServerFunctions`.
+   */
+  executeServerFunctions?: boolean;
+}
+
+export function serverCodeEliminationPlugin(options: ServerCodeEliminationOptions = {}): Plugin {
   const excludeFiles = options.excludeFiles ?? [];
+  const executeServerFunctions = options.executeServerFunctions ?? false;
 
   return {
     name: 'storybook:tanstack-react:server-code-elimination',
@@ -67,7 +80,7 @@ export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] }
           parserOpts: {
             plugins: ['typescript', 'jsx'],
           },
-          plugins: [() => serverCodeElimination(state)],
+          plugins: [() => serverCodeElimination(state, executeServerFunctions)],
           sourceMaps: true,
           configFile: false,
           babelrc: false,
@@ -88,7 +101,8 @@ export function serverCodeEliminationPlugin(options: { excludeFiles?: string[] }
 
 // todo make storybook/internal/babel export PluginObj
 function serverCodeElimination(
-  state: TransformState
+  state: TransformState,
+  executeServerFunctions: boolean
 ): NonNullable<NonNullable<Parameters<typeof transformSync>[1]>['plugins']>[number] {
   /** No-op spy for server-side code */
   function sbFnCall() {
@@ -162,12 +176,17 @@ function serverCodeElimination(
               return;
             }
 
-            // createServerFn()...handler(fn) → replace handler arg with fn() spy
+            // createServerFn()...handler(fn) → replace handler arg with fn() spy,
+            // unless the handler is meant to run in the browser
             if (
               methodName === 'handler' &&
               resolves(root.rootName, 'createServerFn') &&
               SERVER_FN_RE.test(state.code)
             ) {
+              if (executeServerFunctions) {
+                return;
+              }
+
               const handlerArg = node.arguments[0];
               if (handlerArg) {
                 if (t.isIdentifier(handlerArg)) {
@@ -182,9 +201,14 @@ function serverCodeElimination(
               return;
             }
 
-            // createMiddleware()...server(fn) / .inputValidator(fn) → strip call
+            // createMiddleware()...server(fn) / .inputValidator(fn) → strip call.
+            // Kept when server functions run in the browser: a handler that runs
+            // without them would see none of the context its middleware provides.
             if (resolves(root.rootName, 'createMiddleware') && MIDDLEWARE_RE.test(state.code)) {
-              if (methodName === 'server' || methodName === 'inputValidator') {
+              if (
+                !executeServerFunctions &&
+                (methodName === 'server' || methodName === 'inputValidator')
+              ) {
                 if (t.isMemberExpression(path.node.callee)) {
                   path.replaceWith(path.node.callee.object);
                   state.modified = true;
