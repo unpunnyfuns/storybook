@@ -12,6 +12,25 @@ type BuilderName = CompatibleString<'@storybook/builder-vite'>;
 export type FrameworkOptions = {
   /** Builder options passed through to @storybook/builder-vite. */
   builder?: BuilderOptions;
+
+  /**
+   * Keep the `handler` of `createServerFn()` chains, and the `server` and
+   * `inputValidator` phases of `createMiddleware()` chains, in the Storybook
+   * build instead of stripping them, so a story can run that chain in the
+   * browser.
+   *
+   * Off by default. Enabling it only suspends those strips; it does not make
+   * the kept code browser-safe. Everything a handler or a middleware reaches
+   * has to run in a browser, either on its own, through the TanStack packages
+   * the preset redirects to its mocks, or through a `__mocks__` file. Code that
+   * imports `node:fs` or a database client still breaks, at build time or on
+   * the first call.
+   *
+   * Unaffected, and still stripped: `createServerOnlyFn`, the server half of
+   * `createIsomorphicFn`, the `server` option of route factories, and
+   * `*.server.ts` modules.
+   */
+  executeServerFunctions?: boolean;
 };
 
 type StorybookConfigFramework = {
