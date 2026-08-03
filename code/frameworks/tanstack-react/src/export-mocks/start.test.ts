@@ -52,6 +52,15 @@ describe('useServerFn', () => {
     expect(onNavigate).toHaveBeenCalledWith({ to: '/returned' });
   });
 
+  it('falls back to href when a redirect has no to', async () => {
+    const call = renderProbe(async () => {
+      throw redirect({ href: 'https://example.com/x' });
+    });
+
+    await expect(call()).resolves.toBeUndefined();
+    expect(onNavigate).toHaveBeenCalledWith({ to: 'https://example.com/x' });
+  });
+
   it('rethrows a non-redirect error unchanged', async () => {
     onNavigate.mockClear();
     const call = renderProbe(async () => {

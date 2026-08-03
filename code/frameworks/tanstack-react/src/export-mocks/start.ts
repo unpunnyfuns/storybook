@@ -583,9 +583,11 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
           // stays on screen, and the attempt is recorded on the onNavigate spy
           // instead (see spies.ts). What is not reproduced is the real
           // implementation's router.resolveRedirect() (relative-target resolution)
-          // and its `_fromLocation` stamping; only the redirect's own `to` is
-          // forwarded, normalized to match the spy's `{ to, from }` contract.
-          onNavigate({ to: err.options.to as string });
+          // and its `_fromLocation` stamping; only the redirect's own `to` (or
+          // `href`, for the href-only redirect form) is forwarded, normalized to
+          // match the spy's `{ to, from }` contract the same way react-router.ts's
+          // Navigate does.
+          onNavigate({ to: (err.options.to as string) || err.options.href });
           return undefined;
         }
 
