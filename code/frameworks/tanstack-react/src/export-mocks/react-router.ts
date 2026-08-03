@@ -24,13 +24,47 @@ import {
   useCanGoBack as _useCanGoBack,
   useLinkProps as _useLinkProps,
 } from '@tanstack/react-router';
-import type { Navigate as _Navigate } from '@tanstack/react-router';
+import { Navigate as _Navigate } from '@tanstack/react-router';
 import { onNavigate } from './spies.ts';
 import { isPathlessFileRouteId, normalizeFileRoutePath } from '../routing/path-utils.ts';
 
+const STORY_NAVIGATION_SYMBOL = Symbol.for('storybook.tanstack-react.story-navigation');
+
+/**
+ * Whether this story performs navigation or only records it. Written by the
+ * decorator through `story-navigation.ts`; read here through the same symbol
+ * rather than an import, because a file under `export-mocks/` must not gain
+ * exports and must not depend on one that could.
+ */
+function navigationEnabled() {
+  return (globalThis as Record<symbol, unknown>)[STORY_NAVIGATION_SYMBOL] === true;
+}
+
 // Mock navigation hooks — backed by real implementations so they work in stories
-export const useNavigate = fn(_useNavigate).mockName('@tanstack/react-router::useNavigate');
-export const useRouter = fn(_useRouter).mockName('@tanstack/react-router::useRouter');
+export const useNavigate = fn(((opts?: Parameters<typeof _useNavigate>[0]) => {
+  const navigate = _useNavigate(opts);
+
+  return (options: Parameters<ReturnType<typeof _useNavigate>>[0]) => {
+    onNavigate({ to: options?.to as string | undefined });
+    return navigationEnabled() ? navigate(options) : Promise.resolve();
+  };
+}) as typeof _useNavigate).mockName('@tanstack/react-router::useNavigate');
+export const useRouter = fn((() => {
+  const router = _useRouter();
+
+  return new Proxy(router, {
+    get(target, property, receiver) {
+      if (property !== 'navigate') {
+        return Reflect.get(target, property, receiver);
+      }
+
+      return (options: Parameters<typeof target.navigate>[0]) => {
+        onNavigate({ to: options?.to as string | undefined });
+        return navigationEnabled() ? target.navigate(options) : Promise.resolve();
+      };
+    },
+  });
+}) as typeof _useRouter).mockName('@tanstack/react-router::useRouter');
 export const useBlocker = fn(_useBlocker).mockName('@tanstack/react-router::useBlocker');
 export const useSearch = fn(_useSearch).mockName('@tanstack/react-router::useSearch');
 export const useParams = fn(_useParams).mockName('@tanstack/react-router::useParams');
@@ -51,7 +85,11 @@ export const Navigate: typeof _Navigate = ({ to, href }) => {
     onNavigate({ to: (to as string) || href });
   }, [to, href]);
 
-  return null;
+  // The real component declares a `null` return type, so rendering it needs a
+  // cast; it renders nothing either way and only its effect navigates.
+  return navigationEnabled()
+    ? (React.createElement(_Navigate, { to, href } as never) as never)
+    : null;
 };
 
 export const Link = ({
@@ -64,13 +102,21 @@ export const Link = ({
   [key: string]: unknown;
 }) => {
   const location = useLocation();
+  const router = _useRouter();
   return React.createElement(
     'a',
     {
       href: to,
       onClick: (e: React.MouseEvent) => {
+        // The anchor's own default action would take the whole preview frame
+        // out of the story, so it is prevented either way: a story that opted
+        // into navigation gets a client side one through the router instead.
         e.preventDefault();
         onNavigate({ to, from: location.href });
+
+        if (navigationEnabled()) {
+          router.navigate({ to } as never);
+        }
       },
       ...props,
     },
