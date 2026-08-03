@@ -36,7 +36,13 @@ export async function roundTrip<T>(value: T): Promise<T> {
  * FormData never reaches the serializer in a real app: the client sends it as
  * the raw request body and the server rebuilds it with request.formData(), so
  * the handler always receives a FormData instance that is not the one the
- * caller passed. Copying it here reproduces both halves of that.
+ * caller passed. Copying it here reproduces that much.
+ *
+ * Two divergences from the real path are left in deliberately. The real client
+ * mutates the caller's FormData to carry the serialized context, which a story
+ * has no reason to observe. And this copy is shallow, so File and Blob entries
+ * stay reference-identical where a rebuilt instance would not. Both leave a
+ * story more forgiving than the wire, never stricter.
  */
 function copyFormData(data: FormData) {
   const copy = new FormData();
