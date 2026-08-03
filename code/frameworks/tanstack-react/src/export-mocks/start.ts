@@ -577,11 +577,15 @@ export function useServerFn<T extends (...args: Array<any>) => Promise<any>>(
         return res;
       } catch (err) {
         if (isRedirect(err)) {
-          // Real useServerFn resolves the redirect against a live router (relative
-          // targets, _fromLocation) and calls router.navigate(). This mock has no
-          // live router, so it forwards the raw redirect options to the onNavigate
-          // spy instead, matching how Link/Navigate report attempted navigation.
-          onNavigate(err.options);
+          // Stories do run inside a real RouterProvider (see routing/decorator.tsx),
+          // so a live router is available here. This seam deliberately does not call
+          // router.navigate() anyway: navigation is blocked on purpose so the story
+          // stays on screen, and the attempt is recorded on the onNavigate spy
+          // instead (see spies.ts). What is not reproduced is the real
+          // implementation's router.resolveRedirect() (relative-target resolution)
+          // and its `_fromLocation` stamping; only the redirect's own `to` is
+          // forwarded, normalized to match the spy's `{ to, from }` contract.
+          onNavigate({ to: err.options.to as string });
           return undefined;
         }
 

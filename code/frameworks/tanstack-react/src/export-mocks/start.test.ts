@@ -42,13 +42,29 @@ describe('useServerFn', () => {
     });
 
     await expect(call()).resolves.toBeUndefined();
-    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/after' }));
+    expect(onNavigate).toHaveBeenCalledWith({ to: '/after' });
   });
 
   it('navigates instead of returning when a server function returns a redirect', async () => {
     const call = renderProbe(async () => redirect({ to: '/returned' }));
 
     await expect(call()).resolves.toBeUndefined();
-    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/returned' }));
+    expect(onNavigate).toHaveBeenCalledWith({ to: '/returned' });
+  });
+
+  it('rethrows a non-redirect error unchanged', async () => {
+    onNavigate.mockClear();
+    const call = renderProbe(async () => {
+      throw new Error('boom');
+    });
+
+    await expect(call()).rejects.toThrow('boom');
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('returns the resolved value unchanged for a non-redirect result', async () => {
+    const call = renderProbe(async () => 'ok');
+
+    await expect(call()).resolves.toBe('ok');
   });
 });
