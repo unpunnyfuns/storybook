@@ -14,10 +14,20 @@ export type FrameworkOptions = {
   builder?: BuilderOptions;
 
   /**
-   * Keep the `handler` of `createServerFn()` chains, and the `server` and
-   * `inputValidator` phases of `createMiddleware()` chains, in the Storybook
-   * build instead of stripping them, so a story can run that chain in the
-   * browser.
+   * Experimental, and incomplete on its own. Keeps the `handler` argument of
+   * `createServerFn()` chains, and the `server` and `inputValidator` phases of
+   * `createMiddleware()` chains, in the Storybook build instead of stripping
+   * them, so that code survives into the browser bundle.
+   *
+   * Surviving into the bundle is not the same as the chain running. Executing a
+   * server function the way TanStack does, with its middleware chain and its
+   * validators, additionally requires the `createServerFn` mock that delegates
+   * to the real builder, which is not part of this change. Against the current
+   * mock, enabling this means a handler body executes with no middleware
+   * context and no input validation: `opts.context` is `undefined`, and
+   * unvalidated input reaches the handler. That is a quieter failure than the
+   * no-op spy the handler is replaced with while this is off, so leave it off
+   * until the delegating mock lands.
    *
    * Off by default. Enabling it only suspends those strips; it does not make
    * the kept code browser-safe. Everything a handler or a middleware reaches
@@ -26,9 +36,9 @@ export type FrameworkOptions = {
    * imports `node:fs` or a database client still breaks, at build time or on
    * the first call.
    *
-   * Unaffected, and still stripped: `createServerOnlyFn`, the server half of
-   * `createIsomorphicFn`, the `server` option of route factories, and
-   * `*.server.ts` modules.
+   * Unaffected by this option, and still rewritten the way they are today:
+   * `createServerOnlyFn`, `createIsomorphicFn`, the `server` option of route
+   * factories, and `*.server.ts` modules.
    */
   executeServerFunctions?: boolean;
 };

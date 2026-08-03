@@ -32,8 +32,9 @@ export interface ServerCodeEliminationOptions {
   excludeFiles?: string[];
   /**
    * Keep `createServerFn().handler()` and the `server` / `inputValidator`
-   * phases of `createMiddleware()` in the bundle, so a story can run that
-   * chain in the browser. See `FrameworkOptions.executeServerFunctions`.
+   * phases of `createMiddleware()` in the bundle instead of stripping them.
+   * Whether that code then runs as a chain is up to the `createServerFn` mock.
+   * See `FrameworkOptions.executeServerFunctions`.
    */
   executeServerFunctions?: boolean;
 }

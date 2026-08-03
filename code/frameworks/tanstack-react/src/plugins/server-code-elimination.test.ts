@@ -390,6 +390,14 @@ describe('serverCodeEliminationPlugin', () => {
     });
 
     it('keeps the handler and its validator when the option is on', async () => {
+      // Returning null means the plugin rewrote nothing, not that it skipped
+      // the file: the default-behavior twin above rewrites this same source
+      // under this same id.
+      const result = await transform(SERVER_FN, '/app/src/fn.ts', {
+        executeServerFunctions: true,
+      });
+      expect(result).toBeNull();
+
       const code = await transformedCode(SERVER_FN, '/app/src/fn.ts', {
         executeServerFunctions: true,
       });
