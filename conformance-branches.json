@@ -1,5 +1,5 @@
 {
-  "comment": "Every fix branch composed into conformance-build, with the tip last reconciled with it. The build workflow fails when a tip on the fork no longer matches, because the tarball is built from this branch alone: work added to a fix branch after its merge is absent from the release and nothing else reports it. Ancestry cannot stand in for this, because several branches were squashed after being composed and later phases rewrote the same code, so their tips are not ancestors although their content is present. Update a sha in the same commit that merges the new work, never on its own.",
+  "comment": "Every fix branch composed into conformance-build, with the tip last reconciled with it. The build workflow fails when a tip on the fork no longer matches, because the tarball is built from this branch alone: work added to a fix branch after its merge is absent from the release and nothing else reports it. Ancestry cannot stand in for this, because several branches were squashed after being composed and later phases rewrote the same code, so their tips are not ancestors although their content is present. Update a sha in the same commit that merges the new work, never on its own. The phase field is taken from the plan document that owns the branch, not from when it was written; null means no plan owns it.",
   "branches": [
     {
       "branch": "feat/tanstack-auto-connect-route-tree",
@@ -10,7 +10,7 @@
     {
       "branch": "fix/tanstack-cookie-scope",
       "sha": "cb60d8cc9e16ff1aaa776b1e2384e140105f1610",
-      "phase": 1
+      "phase": 2
     },
     {
       "branch": "fix/tanstack-create-start-instance",
@@ -25,8 +25,8 @@
     {
       "branch": "fix/tanstack-index-of-pathless-layout",
       "sha": "c05b211fd2922c5af543aea66944a93236d4c4b2",
-      "phase": 1,
-      "note": "reads a trailing slash as an index; composed on 2026-08-04, later than the rest of phase 1"
+      "phase": null,
+      "note": "composed 2026-08-04, after the phase plans were written; reads a trailing slash as an index; composed on 2026-08-04, later than the rest of phase 1"
     },
     {
       "branch": "fix/tanstack-isomorphic-order",
@@ -57,13 +57,14 @@
     {
       "branch": "fix/tanstack-react-pathless-layout-routes",
       "sha": "11e137ebbdbec629360f5d0dbfe1060a15c8d7bf",
-      "phase": 1,
-      "note": "the fork branch was rebased well past the commit that was composed; checked on 2026-08-04, it adds nothing to the composition"
+      "phase": null,
+      "note": "predates the phase plans; the fork branch was rebased well past the commit that was composed; checked on 2026-08-04, it adds nothing to the composition"
     },
     {
       "branch": "fix/tanstack-start-mock-nav-surface",
       "sha": "88b98a6a01a8c1bbfd29b827d0183296245b3fcb",
-      "phase": 1
+      "phase": null,
+      "note": "no plan owns it; the phase 3 plan references it as context"
     },
     {
       "branch": "feat/tanstack-execute-server-fns",
@@ -80,7 +81,7 @@
     {
       "branch": "fix/tanstack-strip-validator",
       "sha": "555ce27deba359c5099b1d992f94dcbe23c9889e",
-      "phase": 2
+      "phase": 1
     },
     {
       "branch": "fix/tanstack-use-server-fn-redirect",
@@ -111,6 +112,12 @@
       "sha": "5ad9eb6cc969f658c7420db0f249a6d99484109c",
       "phase": null,
       "note": "PR #35505, still open; the fork branch was rebased well past the commit that was composed; checked on 2026-08-04, it adds nothing to the composition"
+    },
+    {
+      "branch": "fix/tanstack-to-form-story-path",
+      "sha": "a489c653e93c74e7723ae02e0db907831c41ff6f",
+      "phase": null,
+      "note": "accepts the to form of a route path in stories; found by the router-standalone gauge, see docs/audits/2026-08-05-post-audit-findings.md in the conformance repo"
     }
   ],
   "excluded": [
