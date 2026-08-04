@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
+import type { RouteTreeConnection } from './route-tree-connection.ts';
 import { findGeneratedRouteTree, resolveRouteTreeConnection } from './route-tree-connection.ts';
+import { routeTreeInjectionPlugin } from './route-tree-injection.ts';
 
 function project(files: string[]): string {
   const root = mkdtempSync(join(tmpdir(), 'sb-tanstack-'));
@@ -13,6 +15,23 @@ function project(files: string[]): string {
     writeFileSync(full, '');
   }
   return root;
+}
+
+function generate(root: string, file: string) {
+  const full = join(root, file);
+  mkdirSync(join(full, '..'), { recursive: true });
+  writeFileSync(full, '');
+  return full;
+}
+
+/** Runs the connection through the plugin it feeds, as the preset wires them. */
+function transformPreview(connection: RouteTreeConnection | undefined) {
+  if (!connection) {
+    throw new Error('no connection was resolved');
+  }
+  const plugin = routeTreeInjectionPlugin(connection);
+  const handler = (plugin.transform as any).handler;
+  return handler.call({}, 'export const x = 1;', connection.previewPath);
 }
 
 describe('findGeneratedRouteTree', () => {
@@ -44,8 +63,7 @@ describe('findGeneratedRouteTree', () => {
   });
 
   it('does not fall back to the default when a configured path is missing', () => {
-    // The default exists, but the user pointed somewhere else. Silently loading
-    // a different tree would be worse than loading none.
+    // The default exists here, but the user pointed elsewhere.
     const root = project(['src/routeTree.gen.ts']);
 
     expect(findGeneratedRouteTree(root, 'custom/myTree.gen.ts')).toBeUndefined();
@@ -56,23 +74,14 @@ describe('resolveRouteTreeConnection', () => {
   it('pairs the generated tree with the project preview file', () => {
     const root = project(['src/routeTree.gen.ts', '.storybook/preview.ts']);
 
-    expect(resolveRouteTreeConnection({ configDir: join(root, '.storybook') })).toEqual({
-      routeTreePath: join(root, 'src/routeTree.gen.ts'),
-      previewPath: join(root, '.storybook/preview.ts'),
-    });
-  });
+    const connection = resolveRouteTreeConnection({ configDir: join(root, '.storybook') });
 
-  it('connects nothing when the project has no generated tree', () => {
-    // The normal case for code-based and virtual routing.
-    const root = project(['.storybook/preview.ts']);
-
-    expect(resolveRouteTreeConnection({ configDir: join(root, '.storybook') })).toBeUndefined();
+    expect(connection?.previewPath).toBe(join(root, '.storybook/preview.ts'));
+    expect(connection?.resolveRouteTreePath()).toBe(join(root, 'src/routeTree.gen.ts'));
   });
 
   it('connects nothing when the project has no preview file', () => {
-    // The preview file is the only module both story formats are guaranteed to
-    // load, so without one there is nowhere to inject that works for both.
-    // Connecting on one path only would be worse than leaving it alone.
+    // Without one there is nowhere to inject that both story formats reach.
     const root = project(['src/routeTree.gen.ts']);
 
     expect(resolveRouteTreeConnection({ configDir: join(root, '.storybook') })).toBeUndefined();
@@ -92,14 +101,66 @@ describe('resolveRouteTreeConnection', () => {
   it('uses a configured tree path', () => {
     const root = project(['custom/myTree.gen.ts', '.storybook/preview.ts']);
 
-    expect(
-      resolveRouteTreeConnection({
-        configDir: join(root, '.storybook'),
-        generatedRouteTree: 'custom/myTree.gen.ts',
-      })
-    ).toEqual({
-      routeTreePath: join(root, 'custom/myTree.gen.ts'),
-      previewPath: join(root, '.storybook/preview.ts'),
+    const connection = resolveRouteTreeConnection({
+      configDir: join(root, '.storybook'),
+      generatedRouteTree: 'custom/myTree.gen.ts',
     });
+
+    expect(connection?.previewPath).toBe(join(root, '.storybook/preview.ts'));
+    expect(connection?.resolveRouteTreePath()).toBe(join(root, 'custom/myTree.gen.ts'));
+  });
+});
+
+describe('connecting a tree that does not exist yet at config time', () => {
+  it('injects a tree the router plugin only writes once the build has started', () => {
+    // The shape of every clean checkout, and therefore of every CI run.
+    const root = project(['.storybook/preview.ts']);
+    const connection = resolveRouteTreeConnection({ configDir: join(root, '.storybook') });
+
+    const routeTreePath = generate(root, 'src/routeTree.gen.ts');
+
+    expect(transformPreview(connection).code).toContain(`import "${routeTreePath}";`);
+  });
+
+  it('injects a configured tree written after config time', () => {
+    const root = project(['.storybook/preview.ts']);
+    const connection = resolveRouteTreeConnection({
+      configDir: join(root, '.storybook'),
+      generatedRouteTree: 'custom/myTree.gen.ts',
+    });
+
+    const routeTreePath = generate(root, 'custom/myTree.gen.ts');
+
+    expect(transformPreview(connection).code).toContain(`import "${routeTreePath}";`);
+  });
+
+  it('leaves the preview file alone when no tree ever appears', () => {
+    // The normal case for code-based and virtual routing.
+    const root = project(['.storybook/preview.ts']);
+    const connection = resolveRouteTreeConnection({ configDir: join(root, '.storybook') });
+
+    expect(transformPreview(connection)).toBeNull();
+  });
+
+  it('leaves the preview file alone when a configured tree never appears', () => {
+    const root = project(['src/routeTree.gen.ts', '.storybook/preview.ts']);
+    const connection = resolveRouteTreeConnection({
+      configDir: join(root, '.storybook'),
+      generatedRouteTree: 'custom/myTree.gen.ts',
+    });
+
+    expect(transformPreview(connection)).toBeNull();
+  });
+
+  it('keeps the opt-out total, so nothing is installed to reconsider later', () => {
+    const root = project(['.storybook/preview.ts']);
+
+    const connection = resolveRouteTreeConnection({
+      configDir: join(root, '.storybook'),
+      generatedRouteTree: false,
+    });
+    generate(root, 'src/routeTree.gen.ts');
+
+    expect(connection).toBeUndefined();
   });
 });

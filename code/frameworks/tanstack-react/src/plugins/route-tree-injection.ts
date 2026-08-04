@@ -3,32 +3,29 @@ import type { Plugin } from 'vite';
 interface RouteTreeInjectionOptions {
   /** Absolute path of the project's `.storybook/preview` file. */
   previewPath: string;
-  /** Absolute path of the app's generated route tree. */
-  routeTreePath: string;
+  /**
+   * The tree's absolute path, or undefined when the project has none. Called
+   * per transform, not read once: see `resolveRouteTreeConnection`.
+   */
+  resolveRouteTreePath: () => string | undefined;
 }
 
 /**
  * Prepends a side-effect import of the app's generated route tree onto the
- * project's preview file.
+ * project's preview file, so file routes reach stories carrying the id, path
+ * and parent the tree assigns them.
  *
- * The generated tree is what completes a file route: it runs `.update()` over
- * every route to supply the id, path and parent that place it in a tree. Apps
- * do that from their entry module, which Storybook never loads, so without it
- * the decorator receives routes that cannot derive a URL or reach the layouts
- * above them.
- *
- * The project's preview file is the injection point because it is the only
- * module reliably in the graph under both story formats. A `previewAnnotations`
- * entry does not work: for projects using CSF factories the Vite builder emits
- * an import for the preview file alone and drops preset-contributed
- * annotations. Targeting the framework's own preview module does not work
- * either, for the mirror-image reason — it enters the graph only on the CSF3
- * path, since CSF factories reach it inside the bundled framework entry where
- * plugin transforms do not run.
+ * The preview file is the injection point because it is the only module
+ * reliably in the graph under both story formats. A `previewAnnotations` entry
+ * does not work: under CSF factories the Vite builder emits an import for the
+ * preview file alone and drops preset-contributed annotations. The framework's
+ * own preview module fails the mirror image of that, entering the graph only on
+ * the CSF3 path, since CSF factories reach it inside the bundled framework
+ * entry where plugin transforms do not run.
  */
 export function routeTreeInjectionPlugin({
   previewPath,
-  routeTreePath,
+  resolveRouteTreePath,
 }: RouteTreeInjectionOptions): Plugin {
   const normalize = (id: string) => id.split('?')[0];
   const target = normalize(previewPath);
@@ -41,6 +38,13 @@ export function routeTreeInjectionPlugin({
       },
       handler(code, id) {
         if (normalize(id) !== target) {
+          return null;
+        }
+
+        const routeTreePath = resolveRouteTreePath();
+        if (!routeTreePath) {
+          // Code-based and virtual routing never generate a tree. Importing a
+          // file that will never exist would fail the project's build.
           return null;
         }
 

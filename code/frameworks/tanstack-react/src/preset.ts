@@ -74,9 +74,8 @@ export const viteFinal: StorybookConfigVite['viteFinal'] = async (config, option
   ];
 
   // Connect the app's generated route tree so file routes reach the decorator
-  // with the identity it assigns them. Apps do this from their entry module,
-  // which Storybook never loads. Opt out with `generatedRouteTree: false`, or
-  // point it elsewhere with a path.
+  // already placed. Installed for any project with a preview file: whether a
+  // tree exists is decided later, at transform time.
   const framework = await options.presets.apply('framework');
   const frameworkOptions: FrameworkOptions =
     typeof framework === 'string' ? {} : (framework.options ?? {});
