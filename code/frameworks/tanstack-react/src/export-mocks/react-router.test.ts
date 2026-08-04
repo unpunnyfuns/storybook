@@ -82,6 +82,34 @@ describe('createFileRoute', () => {
     expect(Route.options.fullPath).toBe('/');
   });
 
+  // A trailing slash is the index OF the preceding route, so `/_app/` is the
+  // index of the pathless layout `/_app` and carries a path of its own. Read as
+  // a pathless layout it would arrive with no path, and the pair would then
+  // share one identity.
+  it('gives the index of a root-level pathless layout its own path', () => {
+    const Route = build('/_app/');
+
+    expect(Route.options.id).toBe('/_app/');
+    expect(Route.options.path).toBe('/');
+    expect(Route.options.fullPath).toBe('/');
+  });
+
+  it('gives the index of a nested pathless layout its own path', () => {
+    const Route = build('/settings/_tabs/');
+
+    expect(Route.options.id).toBe('/settings/_tabs/');
+    expect(Route.options.path).toBe('/settings/');
+    expect(Route.options.fullPath).toBe('/settings/');
+  });
+
+  it('gives the index of a group its own path', () => {
+    const Route = build('/(marketing)/');
+
+    expect(Route.options.id).toBe('/(marketing)/');
+    expect(Route.options.path).toBe('/');
+    expect(Route.options.fullPath).toBe('/');
+  });
+
   it('trims trailing-underscore (un-nesting) segments', () => {
     const Route = build('/posts_/$postId');
 

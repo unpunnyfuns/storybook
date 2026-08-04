@@ -40,6 +40,15 @@ function isPathlessSegment(segment: string): boolean {
  * trailing-underscore (un-nesting) segment like `posts_` stays pathful.
  */
 export function isPathlessFileRouteId(id: string): boolean {
+  // A trailing slash marks the index OF a route, not the route itself: `/_app/`
+  // is the index of the pathless layout `/_app`, and an index has a path of its
+  // own (`/`). The generator draws the same line, keying its index check off the
+  // trailing slash and its pathless-layout check off the route's filesystem
+  // type. Splitting on `/` and dropping empty segments erases the one character
+  // that separates the two.
+  if (id.length > 1 && id.endsWith('/')) {
+    return false;
+  }
   const segments = id.split('/').filter(Boolean);
   const lastSegment = segments[segments.length - 1];
   return lastSegment != null && isPathlessSegment(lastSegment);
