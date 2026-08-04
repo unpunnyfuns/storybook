@@ -1,11 +1,29 @@
 import type { ComponentType } from 'react';
 import type { AnyRoute, FileRoutesByPath, Register } from '@tanstack/react-router';
-import type { AnyContext, ResolveParams, RouteOptions, RoutesByPath } from '@tanstack/router-core';
+import type {
+  AnyContext,
+  ResolveParams,
+  RouteOptions,
+  RouteToPath,
+  RoutesByPath,
+} from '@tanstack/router-core';
 import type { Decorator } from '@storybook/react';
 
-/** Union of every registered full path (e.g. `'/' | '/admin/users' | '/$libraryId/$version'`). */
-// @ts-expect-error - router is registered in user land
-export type RegisteredFullPath = keyof Register['router']['routesByPath'];
+/**
+ * Union of every URL a story can be mounted at (e.g. `'/' | '/admin/users' |
+ * '/$libraryId/$version'`).
+ *
+ * Both spellings a route answers to, because TanStack has two and a URL is
+ * valid if either accepts it. `routesByPath` is keyed by full paths, where an
+ * index keeps its trailing slash, so `docs/index.tsx` registers `'/docs/'` and
+ * nothing registers `'/docs'`. `RouteToPath` is the other spelling: the one
+ * `<Link to>` takes, the one the documentation teaches, and the one a user
+ * reads out of the address bar. Accepting only the first rejected `'/docs'` for
+ * a route the app serves at `/docs`.
+ */
+export type RegisteredFullPath =
+  // @ts-expect-error - router is registered in user land
+  keyof Register['router']['routesByPath'] | RouteToPath<Register['router']>;
 // @ts-expect-error - router is registered in user land
 export type IsAppRouteTree<TRoute> = TRoute extends Register['router']['routeTree'] ? true : false;
 
@@ -155,7 +173,7 @@ export type RouteTreeOverrides = [keyof FileRoutesByPath] extends [never]
 export interface RouterParameters<
   TRoute = undefined,
   Path extends TRoute extends AnyRoute ? keyof RoutesByPath<TRoute> : RegisteredFullPath =
-    TRoute extends AnyRoute ? keyof RoutesByPath<TRoute> : keyof FileRoutesByPath,
+    TRoute extends AnyRoute ? keyof RoutesByPath<TRoute> : RegisteredFullPath,
 > {
   route?: StoryRouteOptions<TRoute>;
   /**
