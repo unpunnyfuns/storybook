@@ -1,0 +1,146 @@
+{
+  "comment": "Every fix branch composed into conformance-build, with the tip last reconciled with it. The build workflow fails when a tip on the fork no longer matches, because the tarball is built from this branch alone: work added to a fix branch after its merge is absent from the release and nothing else reports it. Ancestry cannot stand in for this, because several branches were squashed after being composed and later phases rewrote the same code, so their tips are not ancestors although their content is present. Update a sha in the same commit that merges the new work, never on its own.",
+  "branches": [
+    {
+      "branch": "feat/tanstack-auto-connect-route-tree",
+      "sha": "e2419771db977c76600fd98a080376ad75e7d02b",
+      "phase": 1,
+      "note": "loads the app routeTree.gen so file routes reach the decorator already placed"
+    },
+    {
+      "branch": "fix/tanstack-cookie-scope",
+      "sha": "cb60d8cc9e16ff1aaa776b1e2384e140105f1610",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-create-start-instance",
+      "sha": "e16979f61d5afa0c2b2736cca215636ee206e738",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-elimination-id-filter",
+      "sha": "9bf2a463a759d294cf13b49ec8518a5f145ea289",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-index-of-pathless-layout",
+      "sha": "c05b211fd2922c5af543aea66944a93236d4c4b2",
+      "phase": 1,
+      "note": "reads a trailing slash as an index; composed on 2026-08-04, later than the rest of phase 1"
+    },
+    {
+      "branch": "fix/tanstack-isomorphic-order",
+      "sha": "19b05e0e3cdbed43cb2497d6727ec26b896c070d",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-missing-params-warning",
+      "sha": "c7cf8ff9181a90745d3db9504747d8c565c1a440",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-navigate-react-effect",
+      "sha": "e1404899a62355bdc712dfecf746c9112b6b99ad",
+      "phase": 1,
+      "note": "if this lands upstream first, two Navigate tests fail and the HooksContext shim must go"
+    },
+    {
+      "branch": "fix/tanstack-optimize-vite-deps",
+      "sha": "7c9308c85456784ac85af0b50b5bff5c8671d96c",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-override-types",
+      "sha": "83285bf3562fdbf625e4a185e5f6f5a3695f4492",
+      "phase": 1
+    },
+    {
+      "branch": "fix/tanstack-react-pathless-layout-routes",
+      "sha": "11e137ebbdbec629360f5d0dbfe1060a15c8d7bf",
+      "phase": 1,
+      "note": "the fork branch was rebased well past the commit that was composed; checked on 2026-08-04, it adds nothing to the composition"
+    },
+    {
+      "branch": "fix/tanstack-start-mock-nav-surface",
+      "sha": "88b98a6a01a8c1bbfd29b827d0183296245b3fcb",
+      "phase": 1
+    },
+    {
+      "branch": "feat/tanstack-execute-server-fns",
+      "sha": "fcf94c040a168b5f5f21115401bc2be2cd92eac4",
+      "phase": 2,
+      "note": "the executeServerFunctions framework option"
+    },
+    {
+      "branch": "fix/tanstack-server-fn-delegation",
+      "sha": "ee017d76a25b06a9d99790e0492a830401bbf28e",
+      "phase": 2,
+      "note": "squashed after being composed; two later commits reached the composition by cherry-pick"
+    },
+    {
+      "branch": "fix/tanstack-strip-validator",
+      "sha": "555ce27deba359c5099b1d992f94dcbe23c9889e",
+      "phase": 2
+    },
+    {
+      "branch": "fix/tanstack-use-server-fn-redirect",
+      "sha": "16e1f6b92173989e90c418d72d43888f988ef868",
+      "phase": 2,
+      "note": "carries two commits on a base that exists on no other branch"
+    },
+    {
+      "branch": "feat/tanstack-export-navigation-spy",
+      "sha": "ec9fec9654e301a2dc97074f5e3bf1685957ce19",
+      "phase": 3,
+      "note": "must land with or before the navigation contract, or three doc passages name a 404"
+    },
+    {
+      "branch": "fix/tanstack-navigation-contract",
+      "sha": "41fce6c0704438808fd47e3f4e38108be528902a",
+      "phase": 3,
+      "note": "squashed after being composed"
+    },
+    {
+      "branch": "feat/tanstack-react-optional-navigation",
+      "sha": "478876b5bb76576ea54dc0af1dde0c5a838375fa",
+      "phase": null,
+      "note": "predates the phases; watched until it is confirmed superseded by the navigation contract"
+    },
+    {
+      "branch": "fix/tanstack-react-link-href",
+      "sha": "5ad9eb6cc969f658c7420db0f249a6d99484109c",
+      "phase": null,
+      "note": "PR #35505, still open; the fork branch was rebased well past the commit that was composed; checked on 2026-08-04, it adds nothing to the composition"
+    }
+  ],
+  "excluded": [
+    {
+      "branch": "fix/tanstack-react-route-overrides-by-id",
+      "reason": "merged upstream (#35497); reaches the tarball through the upstream/next merge"
+    },
+    {
+      "branch": "fix/tanstack-react-leaf-selection",
+      "reason": "merged upstream (#35498)"
+    },
+    {
+      "branch": "fix/tanstack-react-clone-route-ids",
+      "reason": "merged upstream (#35499)"
+    },
+    {
+      "branch": "fix/tanstack-react-clone-lazy-bindings",
+      "reason": "merged upstream (#35500)"
+    },
+    {
+      "branch": "fix/tanstack-react-mock-module-resolution",
+      "reason": "merged upstream (#35501)"
+    },
+    {
+      "branch": "fix/tanstack-react-root-shell-component",
+      "reason": "merged upstream (#35504); the branch is gone from the fork"
+    },
+    {
+      "branch": "fix/tanstack-react-leaf-resolution",
+      "reason": "superseded; an older aggregate of #35499, #35500 and #35501"
+    }
+  ]
+}
