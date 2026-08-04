@@ -189,11 +189,16 @@ export interface RouterParameters<
    * Whether the mocked navigation entry points perform the navigation they
    * record, or only record it on the `onNavigate` spy.
    *
-   * Off by default, and off applies to all four: `Link`, `Navigate`,
-   * `useNavigate` and `useRouter().navigate` all record and leave the story on
-   * screen. On, all four navigate for real and still record.
-   * Navigation the router resolves on its own, such as a thrown `redirect()`,
-   * happens either way and is never recorded.
+   * Off by default, and off applies to all five: `Link`, `Navigate`,
+   * `useNavigate`, `useRouter().navigate` and a `redirect()` a component
+   * receives through `useServerFn` all record and leave the story on screen.
+   * On, all five navigate for real and still record.
+   * Nothing else is gated or recorded. A `redirect()` thrown from a loader or
+   * `beforeLoad`, a link built on `useLinkProps`, and `Route.useNavigate` and
+   * `getRouteApi().useNavigate`, which the route binds to the router's own hook
+   * where the mock cannot reach them, all navigate either way. Only `navigate`
+   * is intercepted on `useRouter()`, so `useRouter().history` navigates either
+   * way too.
    *
    * Turn it on for a story that asserts on where navigation lands. Note that
    * navigating to a route outside the mounted tree renders a not found, as an

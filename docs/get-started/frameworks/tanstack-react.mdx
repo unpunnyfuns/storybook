@@ -114,11 +114,11 @@ Use `'__root__'` as the key to target the root route.
 
 This framework automatically redirects `@tanstack/react-router` imports to a Storybook-compatible mock layer. That mock re-exports TanStack Router APIs and keeps hooks such as [`useSearch()`](https://tanstack.com/router/latest/docs/api/router/useSearchHook) and [`useParams()`](https://tanstack.com/router/latest/docs/api/router/useParamsHook) resolving against the story's router.
 
-Navigation is handled separately. `Link`, `Navigate`, [`useNavigate()`](https://tanstack.com/router/latest/docs/api/router/useNavigateHook), and `useRouter().navigate` always record the attempt on the `onNavigate` spy, which you can import from [`@storybook/tanstack-react/spies`](#storybooktanstack-reactspies) and assert on in a play function. They only perform the navigation when the story sets the [`navigate`](#navigate) parameter. Navigation that the router resolves on its own does not go through those four entry points: a `redirect()` thrown from a loader or `beforeLoad` still redirects whatever the parameter says, and is not recorded. Neither is a custom link built on [`useLinkProps()`](https://tanstack.com/router/latest/docs/api/router/useLinkPropsHook), whose returned `onClick` navigates through the real router.
+Navigation is handled separately. `Link`, `Navigate`, [`useNavigate()`](https://tanstack.com/router/latest/docs/api/router/useNavigateHook), `useRouter().navigate`, and a `redirect()` a component receives through [`useServerFn()`](https://tanstack.com/start/latest/docs/framework/react/guide/server-functions) always record the attempt on the `onNavigate` spy, which you can import from [`@storybook/tanstack-react/spies`](#storybooktanstack-reactspies) and assert on in a play function. They only perform the navigation when the story sets the [`navigate`](#navigate) parameter. Everything else navigates whatever the parameter says, and is never recorded, because it never reaches those five entry points: a `redirect()` thrown from a loader or `beforeLoad` still redirects, as does a custom link built on [`useLinkProps()`](https://tanstack.com/router/latest/docs/api/router/useLinkPropsHook), whose returned `onClick` navigates through the real router. So do `Route.useNavigate()` and `getRouteApi().useNavigate()`, which the route binds to the router's own hook where the mock cannot reach them. On `useRouter()` only `navigate` is intercepted, so `useRouter().history.push()` navigates for real as well.
 
 <Callout variant="warning">
 
-**Breaking change:** `useNavigate()` and `useRouter().navigate` no longer navigate by default. They used to call straight through to the real router and record nothing. They now record on `onNavigate` like the other two, and navigate only when the story sets `parameters.tanstack.router.navigate: true`. A story that calls either one and asserts on where it lands must set that parameter. A story that asserts on the spy keeps working and now also sees the attempts these two never reported.
+**Breaking change:** the `useNavigate()` imported from `@tanstack/react-router` and `useRouter().navigate` no longer navigate by default. They used to call straight through to the real router and record nothing. They now record on `onNavigate` like `Link` and `Navigate`, and navigate only when the story sets `parameters.tanstack.router.navigate: true`. A story that calls either one and asserts on where it lands must set that parameter. A story that asserts on the spy keeps working and now also sees the attempts these two never reported. The change stops there: `Route.useNavigate()` and `getRouteApi().useNavigate()` still navigate by default and still record nothing, so a story built on those is unaffected and cannot assert on the spy.
 
 </Callout>
 
@@ -289,7 +289,7 @@ The package exports these additional modules:
 
 #### `@storybook/tanstack-react/spies`
 
-The spies the router mock records on. It exports `onNavigate`, which is called whenever a story navigates through `Link`, `Navigate`, `useNavigate()`, or `useRouter().navigate`, and the `NavigationEvent` type describing what it receives: the target path as `to`, plus the location navigated away from as `from` for `Link`. Import it to assert on navigation in tests, whether or not the story sets [`navigate`](#navigate).
+The spies the router mock records on. It exports `onNavigate`, which is called whenever a story navigates through `Link`, `Navigate`, `useNavigate()`, `useRouter().navigate`, or a `redirect()` a component receives through `useServerFn()`, and the `NavigationEvent` type describing what it receives: the target path as `to`, plus the location navigated away from as `from` for `Link`. Import it to assert on navigation in tests, whether or not the story sets [`navigate`](#navigate).
 
 #### `@storybook/tanstack-react/start`
 
@@ -327,7 +327,7 @@ Type: `boolean`
 
 Default: `false`
 
-Whether `Link`, `Navigate`, `useNavigate()`, and `useRouter().navigate` perform the navigation they record, or only record it. By default all four record the attempt on the `onNavigate` spy (see [`@storybook/tanstack-react/spies`](#storybooktanstack-reactspies)) and leave the story on screen. Set it to `true` and all four still record, then navigate for real, so the story renders whatever the destination route renders.
+Whether `Link`, `Navigate`, `useNavigate()`, `useRouter().navigate`, and a `redirect()` a component receives through `useServerFn()` perform the navigation they record, or only record it. By default all five record the attempt on the `onNavigate` spy (see [`@storybook/tanstack-react/spies`](#storybooktanstack-reactspies)) and leave the story on screen. Set it to `true` and all five still record, then navigate for real, so the story renders whatever the destination route renders. Nothing outside that set is affected: `Route.useNavigate()`, `getRouteApi().useNavigate()`, `useLinkProps()`, `useRouter().history`, and a `redirect()` thrown from a loader or `beforeLoad` navigate whatever this parameter says.
 
 Turn it on for a story that asserts on where navigation lands. Navigating to a route outside the story's mounted route tree renders a not found, as an unmatched path would in the app.
 
