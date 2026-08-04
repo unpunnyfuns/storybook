@@ -3,8 +3,12 @@ import type { Plugin } from 'vite';
 interface RouteTreeInjectionOptions {
   /** Absolute path of the project's `.storybook/preview` file. */
   previewPath: string;
-  /** Absolute path of the app's generated route tree. */
-  routeTreePath: string;
+  /**
+   * Absolute path of the app's generated route tree, or undefined when the
+   * project has none. Called per transform rather than read once, because the
+   * tree is generated during the build.
+   */
+  resolveRouteTreePath: () => string | undefined;
 }
 
 /**
@@ -25,10 +29,16 @@ interface RouteTreeInjectionOptions {
  * either, for the mirror-image reason — it enters the graph only on the CSF3
  * path, since CSF factories reach it inside the bundled framework entry where
  * plugin transforms do not run.
+ *
+ * The tree is looked up here rather than when the plugin is installed. Vite
+ * config runs before `@tanstack/router-plugin` has generated the file, and a
+ * gitignored file is absent on every clean checkout, so an answer taken then
+ * would be wrong exactly where it matters. By the time a module is transformed
+ * the tree is on disk, and still missing means the project genuinely has none.
  */
 export function routeTreeInjectionPlugin({
   previewPath,
-  routeTreePath,
+  resolveRouteTreePath,
 }: RouteTreeInjectionOptions): Plugin {
   const normalize = (id: string) => id.split('?')[0];
   const target = normalize(previewPath);
@@ -41,6 +51,13 @@ export function routeTreeInjectionPlugin({
       },
       handler(code, id) {
         if (normalize(id) !== target) {
+          return null;
+        }
+
+        const routeTreePath = resolveRouteTreePath();
+        if (!routeTreePath) {
+          // Code-based and virtual routing never generate a tree. Importing a
+          // file that will never exist would fail the project's build.
           return null;
         }
 

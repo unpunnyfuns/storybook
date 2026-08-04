@@ -77,6 +77,11 @@ export const viteFinal: StorybookConfigVite['viteFinal'] = async (config, option
   // with the identity it assigns them. Apps do this from their entry module,
   // which Storybook never loads. Opt out with `generatedRouteTree: false`, or
   // point it elsewhere with a path.
+  //
+  // The plugin is installed for any project with a preview file, including one
+  // that has no generated tree. Whether a tree exists cannot be decided here:
+  // it is written during the build, after this runs. The plugin asks when it
+  // transforms the preview file and injects nothing if there is still none.
   const framework = await options.presets.apply('framework');
   const frameworkOptions: FrameworkOptions =
     typeof framework === 'string' ? {} : (framework.options ?? {});
