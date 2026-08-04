@@ -102,12 +102,6 @@
       "note": "squashed after being composed"
     },
     {
-      "branch": "feat/tanstack-react-optional-navigation",
-      "sha": "478876b5bb76576ea54dc0af1dde0c5a838375fa",
-      "phase": null,
-      "note": "predates the phases; watched until it is confirmed superseded by the navigation contract"
-    },
-    {
       "branch": "fix/tanstack-react-link-href",
       "sha": "5ad9eb6cc969f658c7420db0f249a6d99484109c",
       "phase": null,
@@ -148,6 +142,10 @@
     {
       "branch": "fix/tanstack-react-leaf-resolution",
       "reason": "superseded; an older aggregate of #35499, #35500 and #35501"
+    },
+    {
+      "branch": "feat/tanstack-react-optional-navigation",
+      "reason": "superseded by the phase 3 navigation contract, which shipped the opt-in it prototyped; its remaining commits are the leaf-selection, clone-id and lazy-binding fixes already merged upstream"
     }
   ]
 }
