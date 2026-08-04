@@ -112,6 +112,11 @@ describe('createStoryRouter with a pathless layout that already has an index chi
 // pathless leaf matchable, which derives that same `/_app/`. Read as the index
 // it is, the route carries a path of its own, no synthetic child is added, and
 // the collision cannot arise.
+//
+// Upstream fixes the same collision in `duplicate-tree.ts` by stripping the
+// trailing slash to the enclosing layout id instead. That branch is guarded on
+// the route having no path, so it does not run once the slash is read as an
+// index, and the id stays `/_app/` as it is in a real app.
 describe('createStoryRouter with a standalone index of a pathless layout', () => {
   it('mounts a root-level layout index without colliding', async () => {
     const router = createStoryRouter({
