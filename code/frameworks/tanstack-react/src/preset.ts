@@ -30,11 +30,9 @@ export const previewAnnotations: PresetProperty<'previewAnnotations'> = (entry =
   fileURLToPath(import.meta.resolve('@storybook/tanstack-react/preview')),
 ];
 
-// None of these devtools packages are a dependency or peer of this framework
-// (and the query one additionally needs TanStack Query installed), so they
-// only belong in `optimizeDeps.include` when the user's project actually has
-// them. An unconditional include makes Vite log "Failed to resolve
-// dependency" on every cold start for a project that has none of them.
+// Not dependencies or peers of this framework, so they only belong in
+// `optimizeDeps.include` when the user's project has them: an unconditional
+// include makes Vite log "Failed to resolve dependency" on every cold start.
 const devtoolsPackages = [
   '@tanstack/react-devtools',
   '@tanstack/react-query-devtools',
@@ -97,14 +95,8 @@ export const viteFinal: StorybookConfigVite['viteFinal'] = async (config, option
   ];
 
   // Connect the app's generated route tree so file routes reach the decorator
-  // with the identity it assigns them. Apps do this from their entry module,
-  // which Storybook never loads. Opt out with `generatedRouteTree: false`, or
-  // point it elsewhere with a path.
-  //
-  // The plugin is installed for any project with a preview file, including one
-  // that has no generated tree. Whether a tree exists cannot be decided here:
-  // it is written during the build, after this runs. The plugin asks when it
-  // transforms the preview file and injects nothing if there is still none.
+  // already placed. Installed for any project with a preview file: whether a
+  // tree exists is decided later, at transform time.
   const connection = resolveRouteTreeConnection({
     configDir: options.configDir,
     generatedRouteTree: frameworkOptions.generatedRouteTree,

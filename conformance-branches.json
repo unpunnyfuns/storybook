@@ -3,7 +3,7 @@
   "branches": [
     {
       "branch": "feat/tanstack-auto-connect-route-tree",
-      "sha": "e2419771db977c76600fd98a080376ad75e7d02b",
+      "sha": "13b304a2ce9d06232d2d08374921e89f0bc053eb",
       "phase": 1,
       "note": "loads the app routeTree.gen so file routes reach the decorator already placed"
     },
@@ -14,12 +14,12 @@
     },
     {
       "branch": "fix/tanstack-create-start-instance",
-      "sha": "e16979f61d5afa0c2b2736cca215636ee206e738",
+      "sha": "8644b0dbc26e1e1e02cf1cf4c200029349381e97",
       "phase": 1
     },
     {
       "branch": "fix/tanstack-elimination-id-filter",
-      "sha": "9bf2a463a759d294cf13b49ec8518a5f145ea289",
+      "sha": "586ef6e224c08cc9e295241ca87773770ce3ef6f",
       "phase": 1
     },
     {
@@ -30,28 +30,28 @@
     },
     {
       "branch": "fix/tanstack-isomorphic-order",
-      "sha": "19b05e0e3cdbed43cb2497d6727ec26b896c070d",
+      "sha": "3aae8539be4cef3ded11b6409b4c5015328b0142",
       "phase": 1
     },
     {
       "branch": "fix/tanstack-missing-params-warning",
-      "sha": "c7cf8ff9181a90745d3db9504747d8c565c1a440",
+      "sha": "260eade25e66563b66ea7ff418acfbf2a40b2b89",
       "phase": 1
     },
     {
       "branch": "fix/tanstack-navigate-react-effect",
-      "sha": "e1404899a62355bdc712dfecf746c9112b6b99ad",
+      "sha": "a11aa20010a21aab4e4d7ee89995c3f05e837bcf",
       "phase": 1,
       "note": "if this lands upstream first, two Navigate tests fail and the HooksContext shim must go"
     },
     {
       "branch": "fix/tanstack-optimize-vite-deps",
-      "sha": "7c9308c85456784ac85af0b50b5bff5c8671d96c",
+      "sha": "b0b8830d5188d32948708b71e66a0ec4ba137bf5",
       "phase": 1
     },
     {
       "branch": "fix/tanstack-override-types",
-      "sha": "83285bf3562fdbf625e4a185e5f6f5a3695f4492",
+      "sha": "239b2e3b7939a558ffc37b6c878391584c3188e9",
       "phase": 1
     },
     {
@@ -74,7 +74,7 @@
     },
     {
       "branch": "fix/tanstack-strip-validator",
-      "sha": "555ce27deba359c5099b1d992f94dcbe23c9889e",
+      "sha": "5a1ec2ff8d7d49e5aa4c69e86bded2bf954e5b69",
       "phase": 1
     },
     {

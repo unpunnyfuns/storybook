@@ -378,10 +378,8 @@ function getMethodName(node: ReturnType<typeof t.callExpression>): string | null
 }
 
 /**
- * Walk down a `createIsomorphicFn()...` method chain looking for a `.client(fn)`
- * call, regardless of where it sits relative to `.server(fn)`. Used so the
- * `.server()` branch keeps the client implementation even when `.server()` is
- * the outermost call in the chain (e.g. `.client(a).server(b)`).
+ * Walk a `createIsomorphicFn()...` chain for a `.client(fn)` call, wherever it
+ * sits relative to `.server(fn)` (e.g. `.client(a).server(b)`).
  */
 function findClientImplInChain(
   node: ReturnType<typeof t.callExpression>

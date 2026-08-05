@@ -270,8 +270,7 @@ describe('duplicateRouteTree matrix (code-based and file-based trees)', () => {
     expect((router as any).routesById['__root__'].options.component).toBe(marker);
   });
 
-  // This assertion is trivially true at runtime; the real check is that the
-  // line above compiles at all. `tsc --noEmit` is the actual gate here.
+  // The runtime assertion is trivial; the gate is that the annotation compiles.
   it('types a __root__ override without casts', () => {
     const overrides: RouteTreeOverrides = {
       __root__: { component: () => null },

@@ -279,10 +279,7 @@ describe('missing path params', () => {
     expect(once.warn).not.toHaveBeenCalled();
   });
 
-  // A splat route mounted without `_splat` interpolates to `/docs` (no
-  // trailing `undefined`), so `isMissingParams` is a false positive here: the
-  // warning's own text ("the mounted URL will contain the literal string
-  // \"undefined\"") would be untrue for this case.
+  // `/docs/$` interpolates to `/docs`, so the warning's text would be untrue.
   it('does not warn when mounting a splat route without _splat', async () => {
     const root = createRootRoute();
     const docs = createRoute({ path: '/docs/$', getParentRoute: () => root });

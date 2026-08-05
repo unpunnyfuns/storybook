@@ -63,8 +63,7 @@ describe('findGeneratedRouteTree', () => {
   });
 
   it('does not fall back to the default when a configured path is missing', () => {
-    // The default exists, but the user pointed somewhere else. Silently loading
-    // a different tree would be worse than loading none.
+    // The default exists here, but the user pointed elsewhere.
     const root = project(['src/routeTree.gen.ts']);
 
     expect(findGeneratedRouteTree(root, 'custom/myTree.gen.ts')).toBeUndefined();
@@ -82,9 +81,7 @@ describe('resolveRouteTreeConnection', () => {
   });
 
   it('connects nothing when the project has no preview file', () => {
-    // The preview file is the only module both story formats are guaranteed to
-    // load, so without one there is nowhere to inject that works for both.
-    // Connecting on one path only would be worse than leaving it alone.
+    // Without one there is nowhere to inject that both story formats reach.
     const root = project(['src/routeTree.gen.ts']);
 
     expect(resolveRouteTreeConnection({ configDir: join(root, '.storybook') })).toBeUndefined();
@@ -116,10 +113,7 @@ describe('resolveRouteTreeConnection', () => {
 
 describe('connecting a tree that does not exist yet at config time', () => {
   it('injects a tree the router plugin only writes once the build has started', () => {
-    // `routeTree.gen.ts` is gitignored and written by `@tanstack/router-plugin`
-    // during the build, so on a clean checkout it is missing while `viteFinal`
-    // runs. Deciding then leaves every fresh clone, and therefore CI, silently
-    // unconnected.
+    // The shape of every clean checkout, and therefore of every CI run.
     const root = project(['.storybook/preview.ts']);
     const connection = resolveRouteTreeConnection({ configDir: join(root, '.storybook') });
 
@@ -141,9 +135,7 @@ describe('connecting a tree that does not exist yet at config time', () => {
   });
 
   it('leaves the preview file alone when no tree ever appears', () => {
-    // The normal case for code-based and virtual routing. Importing a file that
-    // will never exist would break those projects outright, so the check moves
-    // rather than goes away.
+    // The normal case for code-based and virtual routing.
     const root = project(['.storybook/preview.ts']);
     const connection = resolveRouteTreeConnection({ configDir: join(root, '.storybook') });
 

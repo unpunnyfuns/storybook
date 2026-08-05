@@ -25,8 +25,7 @@ describe('routeTreeInjectionPlugin', () => {
   it('runs the tree before the rest of the module', () => {
     const result = transform(previewPath);
 
-    // Anything reading a route's resolved identity must see it already
-    // connected, so the import cannot be appended.
+    // Anything reading a route's identity must see it already connected.
     expect(result.code.indexOf(routeTreePath)).toBeLessThan(result.code.indexOf('export const x'));
   });
 
@@ -35,8 +34,7 @@ describe('routeTreeInjectionPlugin', () => {
   });
 
   it('leaves a module whose name merely contains "preview" alone', () => {
-    // The id filter is a coarse prefilter; only the exact preview module is
-    // rewritten. A user file called `preview-card.tsx` passes the filter.
+    // The id filter is a coarse prefilter; this file passes it.
     expect(transform('/app/src/components/preview-card.tsx')).toBeNull();
   });
 
@@ -51,9 +49,8 @@ describe('routeTreeInjectionPlugin', () => {
   });
 
   it('asks for the tree on every transform rather than once', () => {
-    // The router plugin writes the tree during the build, so a first transform
-    // that finds nothing must not settle the question for the whole session.
-    let generated: string | undefined;
+    // A first transform that finds nothing must not settle the question.
+    let generated: string | undefined = undefined;
     const plugin = routeTreeInjectionPlugin({
       previewPath,
       resolveRouteTreePath: () => generated,
